@@ -4,11 +4,12 @@ MVP do sistema integrado de atendimento e execução de serviços — back-end e
 
 ## Stack e justificativas
 
-- **PHP 8.2+** / **Laravel 11**
-- **PostgreSQL 16** — escolhido pela integridade referencial robusta (chaves estrangeiras, constraints), suporte nativo a tipos avançados, performance superior em queries de agregação (cálculo de tempo médio de execução) e compatibilidade total com o ecossistema Laravel/Eloquent
+- **PHP 8.4** / **Laravel 11**
+- **PostgreSQL 16** — integridade referencial robusta (FKs, constraints), performance superior em queries de agregação (cálculo de tempo médio) e compatibilidade total com o ecossistema Laravel/Eloquent
 - **Laravel Sanctum** — autenticação token-based simples e adequada para APIs SPA/mobile
-- **L5-Swagger (OpenAPI 3.0)** — documentação das APIs gerada a partir de atributos PHP 8 em `/api/documentation`
+- **OpenAPI 3.0** — especificação manual em `openapi.yaml`, importável diretamente no Insomnia/Postman, sem dependências de runtime
 - **PHPUnit** com SQLite em memória nos testes — isolamento total, sem dependência de banco externo
+- **PCOV** — driver de cobertura de código leve, instalado no container Docker via PECL
 
 ## Arquitetura
 
@@ -44,7 +45,7 @@ docker compose exec app php artisan migrate --seed
 ```
 
 A API ficará disponível em `http://localhost:8000`.
-Documentação Swagger: `http://localhost:8000/api/documentation`
+Importe `openapi.yaml` no Insomnia ou Postman para explorar os endpoints.
 
 ## Como rodar localmente (sem Docker)
 
@@ -70,60 +71,80 @@ php artisan test --coverage --min=80
 
 ## Endpoints
 
-| Método | Rota | Auth | Descrição |
-|--------|------|------|-----------|
-| POST | `/api/login` | Não | Autenticar e obter token |
-| POST | `/api/logout` | Sim | Revogar token |
-| GET | `/api/clientes` | Sim | Listar clientes |
-| POST | `/api/clientes` | Sim | Criar cliente |
-| GET | `/api/clientes/{id}` | Sim | Buscar cliente |
-| PUT | `/api/clientes/{id}` | Sim | Atualizar cliente |
-| DELETE | `/api/clientes/{id}` | Sim | Remover cliente |
-| GET | `/api/veiculos` | Sim | Listar veículos |
-| POST | `/api/veiculos` | Sim | Criar veículo |
-| GET | `/api/veiculos/{id}` | Sim | Buscar veículo |
-| PUT | `/api/veiculos/{id}` | Sim | Atualizar veículo |
-| DELETE | `/api/veiculos/{id}` | Sim | Remover veículo |
-| GET | `/api/servicos` | Sim | Listar serviços |
-| POST | `/api/servicos` | Sim | Criar serviço |
-| GET | `/api/servicos/{id}` | Sim | Buscar serviço |
-| PUT | `/api/servicos/{id}` | Sim | Atualizar serviço |
-| DELETE | `/api/servicos/{id}` | Sim | Remover serviço |
-| GET | `/api/insumos` | Sim | Listar insumos |
-| POST | `/api/insumos` | Sim | Criar insumo |
-| GET | `/api/insumos/{id}` | Sim | Buscar insumo |
-| PUT | `/api/insumos/{id}` | Sim | Atualizar insumo |
-| DELETE | `/api/insumos/{id}` | Sim | Remover insumo |
-| GET | `/api/os` | Sim | Listar ordens de serviço |
-| POST | `/api/os` | Sim | Criar OS |
-| GET | `/api/os/{id}` | Sim | Detalhar OS |
-| PATCH | `/api/os/{id}/status` | Sim | Alterar status da OS |
-| POST | `/api/os/{id}/servicos` | Sim | Adicionar serviço à OS |
-| POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | Sim | Adicionar insumo ao serviço |
-| POST | `/api/os/{id}/orcamento` | Sim | Gerar orçamento |
-| POST | `/api/os/{id}/orcamento/aprovar` | Sim | Aprovar orçamento (baixa estoque) |
-| POST | `/api/os/{id}/orcamento/recusar` | Sim | Recusar orçamento |
-| GET | `/api/os/tempo-medio` | Sim | Tempo médio de execução (minutos) |
-| GET | `/api/consulta-publica` | Não | Status da OS por documento + placa |
+### Autenticação
 
-Documentação completa: `GET /api/documentation`
+| Método | Rota | Auth | Descrição |
+|--------|------|:----:|-----------|
+| POST | `/api/login` | — | Autenticar e obter token Sanctum |
+| POST | `/api/logout` | ✓ | Revogar token |
+
+### Catálogo
+
+| Método | Rota | Auth | Descrição |
+|--------|------|:----:|-----------|
+| GET | `/api/servicos` | ✓ | Listar serviços |
+| POST | `/api/servicos` | ✓ | Criar serviço |
+| GET | `/api/servicos/{id}` | ✓ | Buscar serviço |
+| PUT | `/api/servicos/{id}` | ✓ | Atualizar serviço |
+| DELETE | `/api/servicos/{id}` | ✓ | Remover serviço |
+| GET | `/api/insumos` | ✓ | Listar insumos |
+| POST | `/api/insumos` | ✓ | Criar insumo |
+| GET | `/api/insumos/{id}` | ✓ | Buscar insumo |
+| PUT | `/api/insumos/{id}` | ✓ | Atualizar insumo |
+| DELETE | `/api/insumos/{id}` | ✓ | Remover insumo |
+
+### Identidade
+
+| Método | Rota | Auth | Descrição |
+|--------|------|:----:|-----------|
+| GET | `/api/clientes` | ✓ | Listar clientes |
+| POST | `/api/clientes` | ✓ | Criar cliente (CPF/CNPJ validado) |
+| GET | `/api/clientes/{id}` | ✓ | Buscar cliente |
+| PUT | `/api/clientes/{id}` | ✓ | Atualizar cliente |
+| DELETE | `/api/clientes/{id}` | ✓ | Remover cliente |
+| GET | `/api/veiculos` | ✓ | Listar veículos |
+| POST | `/api/veiculos` | ✓ | Criar veículo (placa validada) |
+| GET | `/api/veiculos/{id}` | ✓ | Buscar veículo |
+| PUT | `/api/veiculos/{id}` | ✓ | Atualizar veículo |
+| DELETE | `/api/veiculos/{id}` | ✓ | Remover veículo |
+
+### Atendimento
+
+| Método | Rota | Auth | Descrição |
+|--------|------|:----:|-----------|
+| GET | `/api/os` | ✓ | Listar OS (ordem FIFO de abertura) |
+| POST | `/api/os` | ✓ | Criar OS |
+| GET | `/api/os/{id}` | ✓ | Detalhar OS |
+| PATCH | `/api/os/{id}/status` | ✓ | Alterar status manualmente |
+| POST | `/api/os/{id}/servicos` | ✓ | Adicionar serviço à OS |
+| POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | ✓ | Adicionar insumo ao serviço |
+| POST | `/api/os/{id}/orcamento` | ✓ | Gerar orçamento → status *Aguardando aprovação* |
+| POST | `/api/os/{id}/orcamento/aprovar` | ✓ | Aprovar orçamento → baixa estoque + status *Em execução* |
+| POST | `/api/os/{id}/orcamento/recusar` | ✓ | Recusar orçamento |
+| GET | `/api/os/tempo-medio` | ✓ | Tempo médio de execução (minutos) |
+
+### Consulta pública
+
+| Método | Rota | Auth | Descrição |
+|--------|------|:----:|-----------|
+| GET | `/api/consulta-publica` | — | Status da OS por documento + placa (sem autenticação) |
 
 ## Bounded Contexts
 
 ```mermaid
 graph TD
-    subgraph Catálogo
+    subgraph CAT["🔧 Catálogo"]
         S[Serviço\nid, nome, valor]
         I[Insumo\nid, nome, valor,\nquantidadeEstoque]
     end
 
-    subgraph Identidade
+    subgraph ID["👤 Identidade"]
         C[Cliente\nid, nome, Documento\ncelular, email]
         V[Veículo\nid, Placa, marca,\nmodelo, ano]
         C -- tem --> V
     end
 
-    subgraph Atendimento
+    subgraph AT["🛠️ Atendimento"]
         OS[OS\nAggregate Root]
         OSS[OSServico]
         OSSI[OSServicoInsumo]
@@ -139,6 +160,15 @@ graph TD
     OS -- refere --> V
     OSS -- refere --> S
     OSSI -- refere --> I
+
+    style CAT fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    style ID  fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style AT  fill:#fef9c3,stroke:#eab308,color:#713f12
+    style OS  fill:#fde68a,stroke:#d97706,color:#451a03,font-weight:bold
+    style S   fill:#bfdbfe,stroke:#3b82f6,color:#1e3a5f
+    style I   fill:#bfdbfe,stroke:#3b82f6,color:#1e3a5f
+    style C   fill:#bbf7d0,stroke:#22c55e,color:#14532d
+    style V   fill:#bbf7d0,stroke:#22c55e,color:#14532d
 ```
 
 > `User` existe apenas como infraestrutura de autenticação (Sanctum) — não pertence ao domínio da oficina.
