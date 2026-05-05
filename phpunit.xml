@@ -12,6 +12,11 @@
             <directory>tests/Feature</directory>
         </testsuite>
     </testsuites>
+    <coverage>
+        <report>
+            <clover outputFile="coverage.xml"/>
+        </report>
+    </coverage>
     <source>
         <include>
             <directory>app</directory>
@@ -19,6 +24,8 @@
         </include>
     </source>
     <php>
+        <ini name="pcov.enabled" value="1"/>
+        <ini name="opcache.enable_cli" value="0"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
