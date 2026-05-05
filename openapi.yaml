@@ -10,6 +10,15 @@ servers:
   - url: http://localhost:8000
     description: Local
 
+tags:
+  - name: Autenticação
+  - name: Clientes
+  - name: Veículos
+  - name: Serviços
+  - name: Insumos
+  - name: Ordens de Serviço
+  - name: Consulta Pública
+
 components:
   securitySchemes:
     sanctum:
@@ -38,8 +47,8 @@ components:
         id: { type: integer }
         nome: { type: string }
         documento: { type: string }
-        celular: { type: string }
-        email: { type: string }
+        celular: { type: string, nullable: true }
+        email: { type: string, nullable: true }
 
     Veiculo:
       type: object
@@ -64,16 +73,72 @@ components:
             id: { type: integer }
             nome: { type: string }
         created_at: { type: string, format: date-time }
-
-    Orcamento:
-      type: object
-      properties:
-        id: { type: integer }
-        os_id: { type: integer }
-        valor_total: { type: number }
-        status: { type: string, enum: [pendente, aprovado, recusado] }
-        data_orcamento: { type: string, format: date-time }
-        data_aprovacao: { type: string, format: date-time, nullable: true }
+        cliente:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nome: { type: string }
+        veiculo:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            placa: { type: string }
+        servicos:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              servico_id: { type: integer }
+              servico:
+                type: object
+                nullable: true
+                properties:
+                  id: { type: integer }
+                  nome: { type: string }
+                  valor: { type: number }
+              insumos:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    insumo_id: { type: integer }
+                    quantidade: { type: integer }
+                    insumo:
+                      type: object
+                      nullable: true
+                      properties:
+                        id: { type: integer }
+                        nome: { type: string }
+                        valor: { type: number }
+        historico_status:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              status_id: { type: integer }
+              status:
+                type: object
+                nullable: true
+                properties:
+                  id: { type: integer }
+                  nome: { type: string }
+              data_status: { type: string, format: date-time }
+        orcamento:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            valor_total: { type: number }
+            status: { type: string, enum: [pendente, aprovado, recusado] }
+            data_orcamento: { type: string, format: date-time }
+            data_aprovacao: { type: string, format: date-time, nullable: true }
 
     Error:
       type: object
@@ -124,21 +189,6 @@ paths:
 
   # ── Clientes ──────────────────────────────────────────────────
   /api/clientes:
-    get:
-      tags: [Clientes]
-      summary: Listar clientes
-      security: [{ sanctum: [] }]
-      responses:
-        200:
-          description: Lista de clientes
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/Cliente' }
     post:
       tags: [Clientes]
       summary: Criar cliente
@@ -166,6 +216,21 @@ paths:
                   data: { $ref: '#/components/schemas/Cliente' }
         422:
           description: CPF/CNPJ inválido ou duplicado
+    get:
+      tags: [Clientes]
+      summary: Listar clientes
+      security: [{ sanctum: [] }]
+      responses:
+        200:
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Cliente' }
 
   /api/clientes/{id}:
     parameters:
@@ -204,6 +269,12 @@ paths:
       responses:
         200:
           description: Cliente atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Cliente' }
     delete:
       tags: [Clientes]
       summary: Remover cliente
@@ -214,21 +285,6 @@ paths:
 
   # ── Veículos ──────────────────────────────────────────────────
   /api/veiculos:
-    get:
-      tags: [Veículos]
-      summary: Listar veículos
-      security: [{ sanctum: [] }]
-      responses:
-        200:
-          description: Lista de veículos
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/Veiculo' }
     post:
       tags: [Veículos]
       summary: Criar veículo
@@ -245,12 +301,33 @@ paths:
                 marca: { type: string, example: Toyota }
                 modelo: { type: string, example: Corolla }
                 ano: { type: integer, example: 2020 }
-                cliente_id: { type: integer }
+                cliente_id: { type: integer, example: 1 }
       responses:
         201:
           description: Veículo criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Veiculo' }
         422:
-          description: Placa inválida ou duplicada
+          description: Placa inválida, duplicada ou cliente_id inexistente
+    get:
+      tags: [Veículos]
+      summary: Listar veículos
+      security: [{ sanctum: [] }]
+      responses:
+        200:
+          description: Lista de veículos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Veiculo' }
 
   /api/veiculos/{id}:
     parameters:
@@ -265,6 +342,12 @@ paths:
       responses:
         200:
           description: Veículo encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Veiculo' }
         404:
           description: Não encontrado
     put:
@@ -283,6 +366,12 @@ paths:
       responses:
         200:
           description: Veículo atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Veiculo' }
     delete:
       tags: [Veículos]
       summary: Remover veículo
@@ -293,21 +382,6 @@ paths:
 
   # ── Serviços ──────────────────────────────────────────────────
   /api/servicos:
-    get:
-      tags: [Serviços]
-      summary: Listar serviços
-      security: [{ sanctum: [] }]
-      responses:
-        200:
-          description: Lista de serviços
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/Servico' }
     post:
       tags: [Serviços]
       summary: Criar serviço
@@ -325,6 +399,27 @@ paths:
       responses:
         201:
           description: Serviço criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Servico' }
+    get:
+      tags: [Serviços]
+      summary: Listar serviços
+      security: [{ sanctum: [] }]
+      responses:
+        200:
+          description: Lista de serviços
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Servico' }
 
   /api/servicos/{id}:
     parameters:
@@ -339,6 +434,12 @@ paths:
       responses:
         200:
           description: Serviço encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Servico' }
         404:
           description: Não encontrado
     put:
@@ -356,6 +457,12 @@ paths:
       responses:
         200:
           description: Serviço atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Servico' }
     delete:
       tags: [Serviços]
       summary: Remover serviço
@@ -366,21 +473,6 @@ paths:
 
   # ── Insumos ───────────────────────────────────────────────────
   /api/insumos:
-    get:
-      tags: [Insumos]
-      summary: Listar insumos
-      security: [{ sanctum: [] }]
-      responses:
-        200:
-          description: Lista de insumos
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/Insumo' }
     post:
       tags: [Insumos]
       summary: Criar insumo
@@ -399,6 +491,27 @@ paths:
       responses:
         201:
           description: Insumo criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Insumo' }
+    get:
+      tags: [Insumos]
+      summary: Listar insumos
+      security: [{ sanctum: [] }]
+      responses:
+        200:
+          description: Lista de insumos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Insumo' }
 
   /api/insumos/{id}:
     parameters:
@@ -413,6 +526,12 @@ paths:
       responses:
         200:
           description: Insumo encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Insumo' }
         404:
           description: Não encontrado
     put:
@@ -431,6 +550,12 @@ paths:
       responses:
         200:
           description: Insumo atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Insumo' }
     delete:
       tags: [Insumos]
       summary: Remover insumo
@@ -441,9 +566,35 @@ paths:
 
   # ── Ordens de Serviço ─────────────────────────────────────────
   /api/os:
+    post:
+      tags: [Ordens de Serviço]
+      summary: Criar OS
+      description: O status inicial é definido automaticamente como Recebida.
+      security: [{ sanctum: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [veiculo_id, cliente_id, descricao_problema]
+              properties:
+                veiculo_id: { type: integer }
+                cliente_id: { type: integer }
+                descricao_problema: { type: string, example: Barulho no motor ao acelerar }
+      responses:
+        201:
+          description: OS criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/OS' }
     get:
       tags: [Ordens de Serviço]
-      summary: Listar OS (mais antigas primeiro)
+      summary: Listar OS
+      description: Retorna ordenadas da mais antiga para a mais recente. Filtros disponíveis por cliente_id, status_id e veiculo_id.
       security: [{ sanctum: [] }]
       parameters:
         - name: cliente_id
@@ -466,39 +617,6 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/OS' }
-    post:
-      tags: [Ordens de Serviço]
-      summary: Criar OS (status inicial = Recebida)
-      security: [{ sanctum: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [veiculo_id, cliente_id, descricao_problema]
-              properties:
-                veiculo_id: { type: integer }
-                cliente_id: { type: integer }
-                descricao_problema: { type: string, example: Barulho no motor ao acelerar }
-      responses:
-        201:
-          description: OS criada
-
-  /api/os/tempo-medio:
-    get:
-      tags: [Ordens de Serviço]
-      summary: Tempo médio entre "Em execução" e "Finalizada" (minutos)
-      security: [{ sanctum: [] }]
-      responses:
-        200:
-          description: Tempo médio calculado
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tempo_medio_minutos: { type: number, nullable: true }
 
   /api/os/{id}:
     parameters:
@@ -508,11 +626,18 @@ paths:
         schema: { type: integer }
     get:
       tags: [Ordens de Serviço]
-      summary: Detalhar OS com serviços, insumos, histórico e orçamento
+      summary: Detalhar OS
+      description: Retorna a OS completa com serviços, insumos, histórico de status e orçamento.
       security: [{ sanctum: [] }]
       responses:
         200:
           description: OS detalhada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/OS' }
         404:
           description: Não encontrada
 
@@ -524,7 +649,7 @@ paths:
         schema: { type: integer }
     patch:
       tags: [Ordens de Serviço]
-      summary: Alterar status manualmente
+      summary: Alterar status
       security: [{ sanctum: [] }]
       requestBody:
         required: true
@@ -534,10 +659,20 @@ paths:
               type: object
               required: [status_id]
               properties:
-                status_id: { type: integer, description: "1=Recebida 2=Em diagnóstico 3=Aguardando aprovação 4=Em execução 5=Finalizada 6=Entregue" }
+                status_id:
+                  type: integer
+                  description: "1=Recebida · 2=Em diagnóstico · 3=Aguardando aprovação · 4=Em execução · 5=Finalizada · 6=Entregue"
       responses:
         200:
           description: Status alterado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/OS' }
+        422:
+          description: Transição de status inválida
 
   /api/os/{id}/servicos:
     parameters:
@@ -561,6 +696,19 @@ paths:
       responses:
         201:
           description: Serviço adicionado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      os_id: { type: integer }
+                      servico_id: { type: integer }
+        422:
+          description: OS não encontrada ou serviço inválido
 
   /api/os/{id}/servicos/{osServicoId}/insumos:
     parameters:
@@ -574,7 +722,7 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Adicionar insumo (peça) ao serviço
+      summary: Adicionar insumo ao serviço
       security: [{ sanctum: [] }]
       requestBody:
         required: true
@@ -589,6 +737,20 @@ paths:
       responses:
         201:
           description: Insumo adicionado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      os_servico_id: { type: integer }
+                      insumo_id: { type: integer }
+                      quantidade: { type: integer }
+        422:
+          description: Serviço não encontrado ou insumo inválido
 
   /api/os/{id}/orcamento:
     parameters:
@@ -598,7 +760,8 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Gerar orçamento (status → Aguardando aprovação)
+      summary: Gerar orçamento
+      description: Calcula o valor total com base nos serviços e insumos e muda o status para Aguardando aprovação.
       security: [{ sanctum: [] }]
       responses:
         201:
@@ -608,9 +771,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  data: { $ref: '#/components/schemas/Orcamento' }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      os_id: { type: integer }
+                      valor_total: { type: number }
+                      status: { type: string, enum: [pendente, aprovado, recusado] }
+                      data_orcamento: { type: string, format: date-time }
         422:
-          description: OS sem serviços
+          description: OS sem serviços cadastrados
 
   /api/os/{id}/orcamento/aprovar:
     parameters:
@@ -620,7 +790,8 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Aprovar orçamento — baixa estoque e muda status para Em execução
+      summary: Aprovar orçamento
+      description: Baixa o estoque dos insumos utilizados e muda o status da OS para Em execução.
       security: [{ sanctum: [] }]
       responses:
         200:
@@ -630,7 +801,12 @@ paths:
               schema:
                 type: object
                 properties:
-                  data: { $ref: '#/components/schemas/Orcamento' }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      status: { type: string, enum: [aprovado] }
+                      data_aprovacao: { type: string, format: date-time }
         422:
           description: Estoque insuficiente ou orçamento não está pendente
 
@@ -647,14 +823,41 @@ paths:
       responses:
         200:
           description: Orçamento recusado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      status: { type: string, enum: [recusado] }
         422:
           description: Orçamento não está pendente
+
+  /api/os/tempo-medio:
+    get:
+      tags: [Ordens de Serviço]
+      summary: Tempo médio de execução
+      description: Tempo médio em minutos entre os status Em execução e Finalizada.
+      security: [{ sanctum: [] }]
+      responses:
+        200:
+          description: Tempo médio calculado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tempo_medio_minutos: { type: number, nullable: true }
 
   # ── Consulta Pública ──────────────────────────────────────────
   /api/consulta-publica:
     get:
       tags: [Consulta Pública]
-      summary: Consultar status da OS por documento do cliente e placa do veículo
+      summary: Consultar status da OS
+      description: Consulta pública por documento do cliente e placa do veículo, sem necessidade de autenticação.
       parameters:
         - name: documento
           in: query
