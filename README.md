@@ -2,6 +2,16 @@
 
 MVP do sistema integrado de atendimento e execução de serviços — back-end em Laravel 11.
 
+## API em produção
+
+Base URL: `https://oficinamecanica-production-46fd.up.railway.app`
+
+Importe o `openapi.yaml` no Insomnia ou Postman e troque o servidor base pela URL acima para testar os endpoints sem precisar rodar nada localmente.
+
+**Fluxo rápido para testar:**
+1. `POST /api/login` com `{"email":"...", "password":"..."}` → obtém o token
+2. Use o token no header `Authorization: Bearer {token}` nas demais rotas
+
 ## Stack e justificativas
 
 - **PHP 8.4** / **Laravel 11**
