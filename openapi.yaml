@@ -5,6 +5,8 @@ info:
   description: API de gestão de oficina mecânica
 
 servers:
+  - url: https://oficinamecanica-production-46fd.up.railway.app
+    description: Produção (Railway)
   - url: http://localhost:8000
     description: Local
 

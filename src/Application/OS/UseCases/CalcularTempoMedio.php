@@ -19,7 +19,7 @@ class CalcularTempoMedio
 
         $resultado = DB::select("
             SELECT AVG(
-                (JULIANDAY(s_fin.data_status) - JULIANDAY(s_exec.data_status)) * 24 * 60
+                EXTRACT(EPOCH FROM (s_fin.data_status::timestamp - s_exec.data_status::timestamp)) / 60
             ) as media_minutos
             FROM os_status s_exec
             JOIN os_status s_fin ON s_exec.os_id = s_fin.os_id

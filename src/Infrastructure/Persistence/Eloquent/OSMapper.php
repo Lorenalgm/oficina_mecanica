@@ -8,6 +8,7 @@ use Domain\Atendimento\Entities\OSOrcamento;
 use Domain\Atendimento\Entities\OSServico;
 use Domain\Atendimento\Entities\OSServicoInsumo;
 use Domain\Atendimento\Entities\OSStatus;
+use Domain\Atendimento\Enums\StatusOrcamento;
 
 class OSMapper
 {
@@ -50,7 +51,7 @@ class OSMapper
                 valorTotal: (float) $orc->valor_total,
                 dataOrcamento: $orc->data_orcamento,
                 dataAprovacao: $orc->data_aprovacao,
-                status: $orc->status,
+                status: StatusOrcamento::from($orc->status),
             ));
         }
 
