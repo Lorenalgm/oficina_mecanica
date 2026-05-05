@@ -11,6 +11,7 @@ on:
 jobs:
   rdme-openapi:
     runs-on: ubuntu-latest
+    environment: main
     steps:
       - name: Checkout
         uses: actions/checkout@v4
