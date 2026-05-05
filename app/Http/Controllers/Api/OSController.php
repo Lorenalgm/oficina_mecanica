@@ -19,6 +19,7 @@ use Application\OS\UseCases\GerarOrcamento;
 use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
 use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
+use Infrastructure\Persistence\Eloquent\OSMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -48,8 +49,9 @@ class OSController extends Controller
         ]);
 
         $lista = $this->listarOS->executar($filtros);
+        $entities = $lista->map(fn($m) => OSMapper::toEntity($m));
 
-        return OSResource::collection($lista);
+        return OSResource::collection($entities);
     }
 
     public function store(StoreOSRequest $request): JsonResponse

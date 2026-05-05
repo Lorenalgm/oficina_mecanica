@@ -2,7 +2,11 @@
 
 namespace App\Http\Resources;
 
-use App\Models\OS;
+use Domain\Atendimento\Entities\OS;
+use Domain\Atendimento\Entities\OSOrcamento;
+use Domain\Atendimento\Entities\OSServico;
+use Domain\Atendimento\Entities\OSServicoInsumo;
+use Domain\Atendimento\Entities\OSStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,52 +18,62 @@ class OSResource extends JsonResource
         $os = $this->resource;
 
         $data = [
-            'id' => $os->id,
-            'cliente_id' => $os->cliente_id,
-            'veiculo_id' => $os->veiculo_id,
-            'descricao_problema' => $os->descricao_problema,
-            'status_atual' => $os->statusAtual ? ['id' => $os->statusAtual->id, 'nome' => $os->statusAtual->nome] : null,
-            'created_at' => $os->created_at,
+            'id' => $os->getId(),
+            'cliente_id' => $os->getClienteId(),
+            'veiculo_id' => $os->getVeiculoId(),
+            'descricao_problema' => $os->getDescricaoProblema(),
+            'status_atual' => ['id' => $os->getStatusAtualId(), 'nome' => $os->getStatusAtualNome()],
+            'created_at' => $os->getCreatedAt(),
         ];
 
-        if ($os->relationLoaded('cliente')) {
-            $data['cliente'] = $os->cliente ? ['id' => $os->cliente->id, 'nome' => $os->cliente->nome] : null;
+        if ($os->getClienteNome() !== null) {
+            $data['cliente'] = ['id' => $os->getClienteId(), 'nome' => $os->getClienteNome()];
         }
 
-        if ($os->relationLoaded('veiculo')) {
-            $data['veiculo'] = $os->veiculo ? ['id' => $os->veiculo->id, 'placa' => $os->veiculo->placa] : null;
+        if ($os->getVeiculoPlaca() !== null) {
+            $data['veiculo'] = ['id' => $os->getVeiculoId(), 'placa' => $os->getVeiculoPlaca()];
         }
 
-        if ($os->relationLoaded('servicos')) {
-            $data['servicos'] = $os->servicos->map(fn ($osServico) => [
-                'id' => $osServico->id,
-                'servico_id' => $osServico->servico_id,
-                'servico' => $osServico->servico ? ['id' => $osServico->servico->id, 'nome' => $osServico->servico->nome, 'valor' => $osServico->servico->valor] : null,
-                'insumos' => $osServico->relationLoaded('insumos') ? $osServico->insumos->map(fn ($osi) => [
-                    'id' => $osi->id,
-                    'insumo_id' => $osi->insumo_id,
-                    'quantidade' => $osi->quantidade,
-                    'insumo' => $osi->insumo ? ['id' => $osi->insumo->id, 'nome' => $osi->insumo->nome, 'valor' => $osi->insumo->valor] : null,
-                ]) : [],
-            ]);
+        if ($os->getServicos() !== null) {
+            $data['servicos'] = array_map(function (OSServico $sv) {
+                return [
+                    'id' => $sv->getId(),
+                    'servico_id' => $sv->getServicoId(),
+                    'servico' => $sv->getServicoNome() !== null
+                        ? ['id' => $sv->getServicoId(), 'nome' => $sv->getServicoNome(), 'valor' => $sv->getServicoValor()]
+                        : null,
+                    'insumos' => array_map(fn(OSServicoInsumo $osi) => [
+                        'id' => $osi->getId(),
+                        'insumo_id' => $osi->getInsumoId(),
+                        'quantidade' => $osi->getQuantidade(),
+                        'insumo' => $osi->getInsumoNome() !== null
+                            ? ['id' => $osi->getInsumoId(), 'nome' => $osi->getInsumoNome(), 'valor' => $osi->getInsumoValor()]
+                            : null,
+                    ], $sv->getInsumos() ?? []),
+                ];
+            }, $os->getServicos());
         }
 
-        if ($os->relationLoaded('historicoStatus')) {
-            $data['historico_status'] = $os->historicoStatus->map(fn ($h) => [
-                'id' => $h->id,
-                'status_id' => $h->status_id,
-                'status' => $h->status ? ['id' => $h->status->id, 'nome' => $h->status->nome] : null,
-                'data_status' => $h->data_status,
-            ]);
+        if ($os->getHistoricoStatus() !== null) {
+            $data['historico_status'] = array_map(fn(OSStatus $h) => [
+                'id' => $h->getId(),
+                'status_id' => $h->getStatusId(),
+                'status' => $h->getStatusNome() !== null
+                    ? ['id' => $h->getStatusId(), 'nome' => $h->getStatusNome()]
+                    : null,
+                'data_status' => $h->getDataStatus(),
+            ], $os->getHistoricoStatus());
         }
 
-        if ($os->relationLoaded('orcamento') && $os->orcamento) {
+        if ($os->getOrcamento() !== null) {
+            /** @var OSOrcamento $orc */
+            $orc = $os->getOrcamento();
             $data['orcamento'] = [
-                'id' => $os->orcamento->id,
-                'valor_total' => $os->orcamento->valor_total,
-                'status' => $os->orcamento->status,
-                'data_orcamento' => $os->orcamento->data_orcamento,
-                'data_aprovacao' => $os->orcamento->data_aprovacao,
+                'id' => $orc->getId(),
+                'valor_total' => $orc->getValorTotal(),
+                'status' => $orc->getStatus(),
+                'data_orcamento' => $orc->getDataOrcamento(),
+                'data_aprovacao' => $orc->getDataAprovacao(),
             ];
         }
 

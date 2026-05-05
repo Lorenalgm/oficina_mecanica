@@ -3,12 +3,14 @@
 namespace Application\OS\UseCases;
 
 use App\Models\OS as OSModel;
+use Domain\Atendimento\Entities\OS;
+use Infrastructure\Persistence\Eloquent\OSMapper;
 
 class DetalharOS
 {
-    public function executar(int $id): ?OSModel
+    public function executar(int $id): ?OS
     {
-        return OSModel::with([
+        $model = OSModel::with([
             'cliente',
             'veiculo',
             'statusAtual',
@@ -17,5 +19,7 @@ class DetalharOS
             'historicoStatus.status',
             'orcamento',
         ])->find($id);
+
+        return $model ? OSMapper::toDetailEntity($model) : null;
     }
 }
