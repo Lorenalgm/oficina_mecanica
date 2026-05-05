@@ -112,6 +112,14 @@ class ClienteTest extends TestCase
             ->assertStatus(204);
     }
 
+    public function test_atualizar_cliente_inexistente_retorna_404(): void
+    {
+        $token = $this->autenticado();
+
+        $this->putJson('/api/clientes/9999', ['nome' => 'Foo'], ['Authorization' => "Bearer {$token}"])
+            ->assertStatus(404);
+    }
+
     public function test_acesso_sem_token_retorna_401(): void
     {
         $this->getJson('/api/clientes')->assertStatus(401);

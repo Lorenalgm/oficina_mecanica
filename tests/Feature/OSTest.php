@@ -247,4 +247,83 @@ class OSTest extends TestCase
         ]))
             ->assertStatus(404);
     }
+
+    public function test_listar_os_com_filtro_de_cliente(): void
+    {
+        $this->criarOS();
+
+        $this->getJson('/api/os?cliente_id=' . $this->cliente->id, $this->headers())
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_listar_os_com_filtro_de_status(): void
+    {
+        $this->criarOS();
+        $status = Status::where('nome', 'Recebida')->first();
+
+        $this->getJson('/api/os?status_id=' . $status->id, $this->headers())
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_listar_os_com_filtro_de_veiculo(): void
+    {
+        $this->criarOS();
+
+        $this->getJson('/api/os?veiculo_id=' . $this->veiculo->id, $this->headers())
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_adicionar_servico_em_os_inexistente_retorna_422(): void
+    {
+        $this->postJson('/api/os/9999/servicos', [
+            'servico_id' => $this->servico->id,
+        ], $this->headers())
+            ->assertStatus(422);
+    }
+
+    public function test_adicionar_insumo_em_servico_inexistente_retorna_422(): void
+    {
+        $os = $this->criarOS();
+
+        $this->postJson("/api/os/{$os->id}/servicos/9999/insumos", [
+            'insumo_id' => $this->insumo->id,
+            'quantidade' => 1,
+        ], $this->headers())
+            ->assertStatus(422);
+    }
+
+    public function test_gerar_orcamento_sem_servicos_retorna_422(): void
+    {
+        $os = $this->criarOS();
+
+        $this->postJson("/api/os/{$os->id}/orcamento", [], $this->headers())
+            ->assertStatus(422);
+    }
+
+    public function test_recusar_orcamento_ja_recusado_retorna_422(): void
+    {
+        $os = $this->criarOS();
+        \App\Models\OSOrcamento::create([
+            'os_id' => $os->id,
+            'valor_total' => 100.00,
+            'data_orcamento' => now(),
+            'status' => 'recusado',
+        ]);
+
+        $this->postJson("/api/os/{$os->id}/orcamento/recusar", [], $this->headers())
+            ->assertStatus(422);
+    }
+
+    public function test_alterar_status_invalido_retorna_422(): void
+    {
+        $os = $this->criarOS();
+
+        $this->patchJson("/api/os/{$os->id}/status", [
+            'status_id' => 9999,
+        ], $this->headers())
+            ->assertStatus(422);
+    }
 }

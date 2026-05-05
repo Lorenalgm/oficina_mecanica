@@ -83,6 +83,14 @@ class InsumoTest extends TestCase
         $this->assertDatabaseMissing('insumos', ['id' => $model->id]);
     }
 
+    public function test_atualizar_insumo_inexistente_retorna_404(): void
+    {
+        $token = $this->autenticado();
+
+        $this->putJson('/api/insumos/9999', ['nome' => 'X', 'valor' => 10.00, 'quantidade_estoque' => 1], ['Authorization' => "Bearer {$token}"])
+            ->assertStatus(404);
+    }
+
     public function test_acesso_sem_token_retorna_401(): void
     {
         $this->getJson('/api/insumos')->assertStatus(401);

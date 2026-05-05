@@ -144,6 +144,14 @@ class VeiculoTest extends TestCase
             ->assertStatus(204);
     }
 
+    public function test_atualizar_veiculo_inexistente_retorna_404(): void
+    {
+        $token = $this->autenticado();
+
+        $this->putJson('/api/veiculos/9999', ['marca' => 'X', 'modelo' => 'Y', 'ano' => 2020], ['Authorization' => "Bearer {$token}"])
+            ->assertStatus(404);
+    }
+
     public function test_acesso_sem_token_retorna_401(): void
     {
         $this->getJson('/api/veiculos')->assertStatus(401);
