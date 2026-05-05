@@ -1,0 +1,21 @@
+name: Sync OpenAPI to ReadMe
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - openapi.yaml
+      - .github/workflows/rdme-openapi.yml
+
+jobs:
+  rdme-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run `openapi` command
+        uses: readmeio/rdme@v9
+        with:
+          rdme: openapi openapi.yaml --key=${{ secrets.README_API_KEY }} --id=69f98674e802933fd78893ae
