@@ -53,13 +53,16 @@ class ServicoController extends Controller
 
     public function update(UpdateServicoRequest $request, int $id): JsonResponse
     {
-        $servico = $this->atualizarServico->executar(
-            id: $id,
-            nome: $request->nome,
-            valor: (float) $request->valor,
-        );
-
-        return (new ServicoResource($servico))->response();
+        try {
+            $servico = $this->atualizarServico->executar(
+                id: $id,
+                nome: $request->nome,
+                valor: (float) $request->valor,
+            );
+            return (new ServicoResource($servico))->response();
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
     }
 
     public function destroy(int $id): JsonResponse

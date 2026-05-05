@@ -54,14 +54,17 @@ class InsumoController extends Controller
 
     public function update(UpdateInsumoRequest $request, int $id): JsonResponse
     {
-        $insumo = $this->atualizarInsumo->executar(
-            id: $id,
-            nome: $request->nome,
-            valor: (float) $request->valor,
-            quantidadeEstoque: (int) $request->quantidade_estoque,
-        );
-
-        return (new InsumoResource($insumo))->response();
+        try {
+            $insumo = $this->atualizarInsumo->executar(
+                id: $id,
+                nome: $request->nome,
+                valor: (float) $request->valor,
+                quantidadeEstoque: (int) $request->quantidade_estoque,
+            );
+            return (new InsumoResource($insumo))->response();
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
     }
 
     public function destroy(int $id): JsonResponse

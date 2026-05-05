@@ -54,14 +54,17 @@ class VeiculoController extends Controller
 
     public function update(UpdateVeiculoRequest $request, int $id): JsonResponse
     {
-        $veiculo = $this->atualizarVeiculo->executar(
-            id: $id,
-            marca: $request->marca,
-            modelo: $request->modelo,
-            ano: (int) $request->ano,
-        );
-
-        return (new VeiculoResource($veiculo))->response();
+        try {
+            $veiculo = $this->atualizarVeiculo->executar(
+                id: $id,
+                marca: $request->marca,
+                modelo: $request->modelo,
+                ano: (int) $request->ano,
+            );
+            return (new VeiculoResource($veiculo))->response();
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
     }
 
     public function destroy(int $id): JsonResponse

@@ -54,14 +54,17 @@ class ClienteController extends Controller
 
     public function update(UpdateClienteRequest $request, int $id): JsonResponse
     {
-        $cliente = $this->atualizarCliente->executar(
-            id: $id,
-            nome: $request->nome,
-            celular: $request->celular,
-            email: $request->email,
-        );
-
-        return (new ClienteResource($cliente))->response();
+        try {
+            $cliente = $this->atualizarCliente->executar(
+                id: $id,
+                nome: $request->nome,
+                celular: $request->celular,
+                email: $request->email,
+            );
+            return (new ClienteResource($cliente))->response();
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
     }
 
     public function destroy(int $id): JsonResponse

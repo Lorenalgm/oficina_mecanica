@@ -78,32 +78,38 @@ class OSController extends Controller
 
     public function adicionarServico(StoreOSServicoRequest $request, int $id): JsonResponse
     {
-        $osServico = $this->adicionarServico->executar(
-            osId: $id,
-            servicoId: (int) $request->servico_id,
-        );
-
-        return response()->json(['data' => [
-            'id' => $osServico->id,
-            'os_id' => $osServico->os_id,
-            'servico_id' => $osServico->servico_id,
-        ]], 201);
+        try {
+            $osServico = $this->adicionarServico->executar(
+                osId: $id,
+                servicoId: (int) $request->servico_id,
+            );
+            return response()->json(['data' => [
+                'id' => $osServico->id,
+                'os_id' => $osServico->os_id,
+                'servico_id' => $osServico->servico_id,
+            ]], 201);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function adicionarInsumo(StoreOSServicoInsumoRequest $request, int $id, int $osServicoId): JsonResponse
     {
-        $item = $this->adicionarInsumo->executar(
-            osServicoId: $osServicoId,
-            insumoId: (int) $request->insumo_id,
-            quantidade: (int) $request->quantidade,
-        );
-
-        return response()->json(['data' => [
-            'id' => $item->id,
-            'os_servico_id' => $item->os_servico_id,
-            'insumo_id' => $item->insumo_id,
-            'quantidade' => $item->quantidade,
-        ]], 201);
+        try {
+            $item = $this->adicionarInsumo->executar(
+                osServicoId: $osServicoId,
+                insumoId: (int) $request->insumo_id,
+                quantidade: (int) $request->quantidade,
+            );
+            return response()->json(['data' => [
+                'id' => $item->id,
+                'os_servico_id' => $item->os_servico_id,
+                'insumo_id' => $item->insumo_id,
+                'quantidade' => $item->quantidade,
+            ]], 201);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function gerarOrcamento(int $id): JsonResponse
