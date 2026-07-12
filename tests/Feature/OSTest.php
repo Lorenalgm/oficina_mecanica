@@ -154,9 +154,10 @@ class OSTest extends TestCase
             'valor_total' => 150.00,
             'data_orcamento' => now(),
             'status' => 'pendente',
+            'approval_token' => 'token-aprovar-123',
         ]);
 
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", [], $this->headers())
+        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-aprovar-123'])
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'aprovado');
 
@@ -178,9 +179,10 @@ class OSTest extends TestCase
             'valor_total' => 250.00,
             'data_orcamento' => now(),
             'status' => 'pendente',
+            'approval_token' => 'token-estoque-insuf',
         ]);
 
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", [], $this->headers())
+        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-estoque-insuf'])
             ->assertStatus(422);
 
         $this->assertEquals(1, $this->insumo->fresh()->quantidade_estoque);
@@ -194,9 +196,10 @@ class OSTest extends TestCase
             'valor_total' => 100.00,
             'data_orcamento' => now(),
             'status' => 'pendente',
+            'approval_token' => 'token-recusar-123',
         ]);
 
-        $this->postJson("/api/os/{$os->id}/orcamento/recusar", [], $this->headers())
+        $this->postJson("/api/os/{$os->id}/orcamento/recusar", ['token' => 'token-recusar-123'])
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'recusado');
     }
@@ -311,9 +314,10 @@ class OSTest extends TestCase
             'valor_total' => 100.00,
             'data_orcamento' => now(),
             'status' => 'recusado',
+            'approval_token' => 'token-ja-recusado',
         ]);
 
-        $this->postJson("/api/os/{$os->id}/orcamento/recusar", [], $this->headers())
+        $this->postJson("/api/os/{$os->id}/orcamento/recusar", ['token' => 'token-ja-recusado'])
             ->assertStatus(422);
     }
 
