@@ -52,6 +52,7 @@ class OSMapper
                 dataOrcamento: $orc->data_orcamento,
                 dataAprovacao: $orc->data_aprovacao,
                 status: StatusOrcamento::from($orc->status),
+                approvalToken: $orc->approval_token,
             ));
         }
 

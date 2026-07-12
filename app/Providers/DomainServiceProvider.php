@@ -7,6 +7,8 @@ use Domain\Catalogo\Repositories\ServicoRepository;
 use Domain\Identidade\Repositories\ClienteRepository;
 use Domain\Identidade\Repositories\VeiculoRepository;
 use Domain\Atendimento\Repositories\OSRepository;
+use Domain\Shared\Events\DomainEventDispatcher;
+use Infrastructure\Events\LaravelEventDispatcher;
 use Infrastructure\Persistence\Eloquent\EloquentInsumoRepository;
 use Infrastructure\Persistence\Eloquent\EloquentServicoRepository;
 use Infrastructure\Persistence\Eloquent\EloquentClienteRepository;
@@ -23,5 +25,6 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->bind(ClienteRepository::class, EloquentClienteRepository::class);
         $this->app->bind(VeiculoRepository::class, EloquentVeiculoRepository::class);
         $this->app->bind(OSRepository::class, EloquentOSRepository::class);
+        $this->app->bind(DomainEventDispatcher::class, LaravelEventDispatcher::class);
     }
 }

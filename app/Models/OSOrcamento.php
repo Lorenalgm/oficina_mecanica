@@ -11,7 +11,7 @@ class OSOrcamento extends Model
 
     protected $table = 'os_orcamentos';
 
-    protected $fillable = ['os_id', 'valor_total', 'data_orcamento', 'data_aprovacao', 'status'];
+    protected $fillable = ['os_id', 'valor_total', 'data_orcamento', 'data_aprovacao', 'status', 'approval_token'];
 
     protected $casts = [
         'data_orcamento' => 'datetime',
