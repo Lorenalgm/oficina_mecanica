@@ -594,7 +594,12 @@ paths:
     get:
       tags: [Ordens de Serviço]
       summary: Listar OS
-      description: Retorna ordenadas da mais antiga para a mais recente. Filtros disponíveis por cliente_id, status_id e veiculo_id.
+      description: >-
+        Exclui da listagem as OS com status "Finalizada" e "Entregue".
+        As demais são ordenadas por prioridade de status
+        (Em execução > Aguardando aprovação > Em diagnóstico > Recebida) e,
+        dentro de um mesmo status, da mais antiga para a mais recente (created_at ascendente).
+        Filtros disponíveis por cliente_id, status_id e veiculo_id.
       security: [{ sanctum: [] }]
       parameters:
         - name: cliente_id
@@ -761,7 +766,10 @@ paths:
     post:
       tags: [Ordens de Serviço]
       summary: Gerar orçamento
-      description: Calcula o valor total com base nos serviços e insumos e muda o status para Aguardando aprovação.
+      description: >-
+        Calcula o valor total com base nos serviços e insumos e muda o status para Aguardando aprovação.
+        Gera um approval_token (uso único) retornado apenas nesta resposta — ele autentica a
+        aprovação/recusa externa do orçamento nas rotas públicas correspondentes.
       security: [{ sanctum: [] }]
       responses:
         201:
@@ -779,6 +787,10 @@ paths:
                       valor_total: { type: number }
                       status: { type: string, enum: [pendente, aprovado, recusado] }
                       data_orcamento: { type: string, format: date-time }
+                      approval_token:
+                        type: string
+                        description: Token de uso único para aprovar/recusar o orçamento externamente.
+                        example: 3f9a1c2b7d8e4f0a1b2c3d4e5f6a7b8c9d0e1f2a
         422:
           description: OS sem serviços cadastrados
 
@@ -790,9 +802,27 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Aprovar orçamento
-      description: Baixa o estoque dos insumos utilizados e muda o status da OS para Em execução.
-      security: [{ sanctum: [] }]
+      summary: Aprovar orçamento (webhook público)
+      description: >-
+        Rota PÚBLICA (sem autenticação Sanctum) que simula uma notificação externa de aprovação.
+        Exige o approval_token gerado na criação do orçamento (via query string ou corpo).
+        Baixa o estoque dos insumos utilizados e muda o status da OS para Em execução.
+        O token é de uso único e é invalidado após o uso.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: false
+          description: Token de aprovação (aceito também no corpo da requisição).
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
       responses:
         200:
           description: Orçamento aprovado
@@ -807,6 +837,8 @@ paths:
                       id: { type: integer }
                       status: { type: string, enum: [aprovado] }
                       data_aprovacao: { type: string, format: date-time }
+        401:
+          description: Token de aprovação ausente ou inválido
         422:
           description: Estoque insuficiente ou orçamento não está pendente
 
@@ -818,8 +850,26 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Recusar orçamento
-      security: [{ sanctum: [] }]
+      summary: Recusar orçamento (webhook público)
+      description: >-
+        Rota PÚBLICA (sem autenticação Sanctum) que simula uma notificação externa de recusa.
+        Exige o approval_token gerado na criação do orçamento (via query string ou corpo).
+        O token é de uso único e é invalidado após o uso.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: false
+          description: Token de aprovação (aceito também no corpo da requisição).
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
       responses:
         200:
           description: Orçamento recusado
@@ -833,6 +883,8 @@ paths:
                     properties:
                       id: { type: integer }
                       status: { type: string, enum: [recusado] }
+        401:
+          description: Token de aprovação ausente ou inválido
         422:
           description: Orçamento não está pendente
 
