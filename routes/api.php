@@ -5,6 +5,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [\App\Http\Controllers\Api\AuthController::class, 'login']);
 Route::get('/consulta-publica', [\App\Http\Controllers\Api\OSController::class, 'consultaPublica']);
 
+// Aprovação/recusa de orçamento como notificação externa (webhook público), protegida por approval_token.
+Route::post('/os/{id}/orcamento/aprovar', [\App\Http\Controllers\Api\OSController::class, 'aprovarOrcamento']);
+Route::post('/os/{id}/orcamento/recusar', [\App\Http\Controllers\Api\OSController::class, 'recusarOrcamento']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
 
@@ -22,7 +26,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/servicos', [\App\Http\Controllers\Api\OSController::class, 'adicionarServico']);
         Route::post('/{id}/servicos/{osServicoId}/insumos', [\App\Http\Controllers\Api\OSController::class, 'adicionarInsumo']);
         Route::post('/{id}/orcamento', [\App\Http\Controllers\Api\OSController::class, 'gerarOrcamento']);
-        Route::post('/{id}/orcamento/aprovar', [\App\Http\Controllers\Api\OSController::class, 'aprovarOrcamento']);
-        Route::post('/{id}/orcamento/recusar', [\App\Http\Controllers\Api\OSController::class, 'recusarOrcamento']);
     });
 });
