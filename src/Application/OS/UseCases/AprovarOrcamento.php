@@ -2,55 +2,63 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\Insumo as InsumoModel;
-use App\Models\OS as OSModel;
-use App\Models\OSOrcamento as OSOrcamentoModel;
-use App\Models\OSStatus as OSStatusModel;
-use App\Models\Status;
-use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
-use Infrastructure\Persistence\Eloquent\InsumoMapper;
-use Illuminate\Support\Facades\DB;
+use DateTimeImmutable;
+use Domain\Atendimento\Entities\OSOrcamento;
+use Domain\Atendimento\Events\StatusOSAlterado;
+use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
+use Domain\Atendimento\Repositories\OSRepository;
+use Domain\Catalogo\Repositories\InsumoRepository;
+use Domain\Shared\Events\DomainEventDispatcher;
 use RuntimeException;
 
 class AprovarOrcamento
 {
-    public function executar(int $osId): OSOrcamentoModel
-    {
-        $orcamento = OSOrcamentoModel::where('os_id', $osId)->firstOrFail();
+    public function __construct(
+        private OSRepository $repositorio,
+        private InsumoRepository $insumos,
+        private DomainEventDispatcher $eventos,
+    ) {}
 
-        if ($orcamento->status !== 'pendente') {
+    public function executar(int $osId, ?string $token): OSOrcamento
+    {
+        $os = $token !== null ? $this->repositorio->findByApprovalToken($token) : null;
+
+        if (!$os || $os->getId() !== $osId) {
+            throw new TokenAprovacaoInvalido();
+        }
+
+        $orcamento = $os->getOrcamento();
+        if (!$orcamento || !$orcamento->isPendente()) {
             throw new RuntimeException('Somente orçamentos pendentes podem ser aprovados.');
         }
 
-        $os = OSModel::with(['servicos.insumos.insumo'])->findOrFail($osId);
-
-        DB::transaction(function () use ($orcamento, $os) {
-            foreach ($os->servicos as $osServico) {
-                foreach ($osServico->insumos as $osServicoInsumo) {
-                    $model = InsumoModel::findOrFail($osServicoInsumo->insumo_id);
-                    $entidade = InsumoMapper::toEntity($model);
-                    $entidade->darBaixa($osServicoInsumo->quantidade);
-                    $model->quantidade_estoque = $entidade->getQuantidadeEstoque();
-                    $model->save();
-                }
+        // Valida a baixa de estoque de todos os insumos ANTES de qualquer persistência:
+        // se faltar estoque, a exceção interrompe o fluxo sem gravar nada (rollback natural).
+        $insumosAtualizados = [];
+        foreach ($os->insumosConsumidos() as $insumoId => $quantidade) {
+            $insumo = $this->insumos->findById($insumoId);
+            if (!$insumo) {
+                throw new RuntimeException("Insumo #{$insumoId} não encontrado.");
             }
+            $insumo->darBaixa($quantidade);
+            $insumosAtualizados[] = $insumo;
+        }
 
-            $orcamento->status = 'aprovado';
-            $orcamento->data_aprovacao = now();
-            $orcamento->save();
+        foreach ($insumosAtualizados as $insumo) {
+            $this->insumos->save($insumo);
+        }
 
-            $statusEmExecucao = Status::where('nome', 'Em execução')->first();
-            if ($statusEmExecucao) {
-                $os->status_atual_id = $statusEmExecucao->id;
-                $os->save();
-                OSStatusModel::create([
-                    'os_id' => $os->id,
-                    'status_id' => $statusEmExecucao->id,
-                    'data_status' => now(),
-                ]);
-            }
-        });
+        $orcamento->aprovar(new DateTimeImmutable());
+        $this->repositorio->salvarOrcamento($orcamento);
 
-        return $orcamento->fresh();
+        $statusAnterior = $os->getStatusAtualId();
+        $statusId = $this->repositorio->findStatusIdByNome('Em execução');
+        if ($statusId !== null) {
+            $os->alterarStatus($statusId);
+            $this->repositorio->registrarStatus($osId, $statusId);
+            $this->eventos->dispatch(new StatusOSAlterado($os, $statusAnterior, $statusId));
+        }
+
+        return $orcamento;
     }
 }

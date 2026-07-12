@@ -2,48 +2,29 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OS as OSModel;
-use App\Models\OSOrcamento as OSOrcamentoModel;
-use App\Models\OSStatus as OSStatusModel;
-use App\Models\Status;
+use Domain\Atendimento\Entities\OSOrcamento;
+use Domain\Atendimento\Repositories\OSRepository;
 use RuntimeException;
 
 class GerarOrcamento
 {
-    public function executar(int $osId): OSOrcamentoModel
+    public function __construct(private OSRepository $repositorio) {}
+
+    public function executar(int $osId): OSOrcamento
     {
-        $os = OSModel::with(['servicos.servico', 'servicos.insumos.insumo'])->findOrFail($osId);
+        $os = $this->repositorio->findById($osId);
 
-        if ($os->servicos->isEmpty()) {
-            throw new RuntimeException('A OS não possui serviços para gerar orçamento.');
+        if (!$os) {
+            throw new RuntimeException("OS #{$osId} não encontrada.");
         }
 
-        $valorTotal = 0.0;
+        $valorTotal = $os->calcularValorOrcamento();
 
-        foreach ($os->servicos as $osServico) {
-            $valorTotal += (float) $osServico->servico->valor;
+        $orcamento = $this->repositorio->criarOrcamento($osId, $valorTotal);
 
-            foreach ($osServico->insumos as $osServicoInsumo) {
-                $valorTotal += (float) $osServicoInsumo->insumo->valor * $osServicoInsumo->quantidade;
-            }
-        }
-
-        $orcamento = OSOrcamentoModel::create([
-            'os_id' => $osId,
-            'valor_total' => $valorTotal,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-        ]);
-
-        $statusAguardando = Status::where('nome', 'Aguardando aprovação')->first();
-        if ($statusAguardando) {
-            $os->status_atual_id = $statusAguardando->id;
-            $os->save();
-            OSStatusModel::create([
-                'os_id' => $osId,
-                'status_id' => $statusAguardando->id,
-                'data_status' => now(),
-            ]);
+        $statusId = $this->repositorio->findStatusIdByNome('Aguardando aprovação');
+        if ($statusId !== null) {
+            $this->repositorio->registrarStatus($osId, $statusId);
         }
 
         return $orcamento;

@@ -2,21 +2,30 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OSOrcamento as OSOrcamentoModel;
+use Domain\Atendimento\Entities\OSOrcamento;
+use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
+use Domain\Atendimento\Repositories\OSRepository;
 use RuntimeException;
 
 class RecusarOrcamento
 {
-    public function executar(int $osId): OSOrcamentoModel
-    {
-        $orcamento = OSOrcamentoModel::where('os_id', $osId)->firstOrFail();
+    public function __construct(private OSRepository $repositorio) {}
 
-        if ($orcamento->status !== 'pendente') {
+    public function executar(int $osId, ?string $token): OSOrcamento
+    {
+        $os = $token !== null ? $this->repositorio->findByApprovalToken($token) : null;
+
+        if (!$os || $os->getId() !== $osId) {
+            throw new TokenAprovacaoInvalido();
+        }
+
+        $orcamento = $os->getOrcamento();
+        if (!$orcamento || !$orcamento->isPendente()) {
             throw new RuntimeException('Somente orçamentos pendentes podem ser recusados.');
         }
 
-        $orcamento->status = 'recusado';
-        $orcamento->save();
+        $orcamento->recusar();
+        $this->repositorio->salvarOrcamento($orcamento);
 
         return $orcamento;
     }

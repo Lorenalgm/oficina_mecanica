@@ -2,33 +2,33 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OS as OSModel;
-use App\Models\OSStatus as OSStatusModel;
-use App\Models\Status;
+use Domain\Atendimento\Events\StatusOSAlterado;
 use Domain\Atendimento\Repositories\OSRepository;
-use Illuminate\Support\Facades\DB;
+use Domain\Shared\Events\DomainEventDispatcher;
 use RuntimeException;
 
 class AlterarStatusOS
 {
-    public function __construct(private OSRepository $repositorio) {}
+    public function __construct(
+        private OSRepository $repositorio,
+        private DomainEventDispatcher $eventos,
+    ) {}
 
     public function executar(int $osId, int $statusId): void
     {
-        if (!Status::find($statusId)) {
+        if (!$this->repositorio->statusExiste($statusId)) {
             throw new RuntimeException("Status #{$statusId} não encontrado.");
         }
 
-        DB::transaction(function () use ($osId, $statusId) {
-            $os = OSModel::findOrFail($osId);
-            $os->status_atual_id = $statusId;
-            $os->save();
+        $os = $this->repositorio->findById($osId);
+        if (!$os) {
+            throw new RuntimeException("OS #{$osId} não encontrada.");
+        }
 
-            OSStatusModel::create([
-                'os_id' => $osId,
-                'status_id' => $statusId,
-                'data_status' => now(),
-            ]);
-        });
+        $statusAnterior = $os->getStatusAtualId();
+        $os->alterarStatus($statusId);
+        $this->repositorio->registrarStatus($osId, $statusId);
+
+        $this->eventos->dispatch(new StatusOSAlterado($os, $statusAnterior, $statusId));
     }
 }

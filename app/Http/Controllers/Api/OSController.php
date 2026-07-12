@@ -18,8 +18,9 @@ use Application\OS\UseCases\DetalharOS;
 use Application\OS\UseCases\GerarOrcamento;
 use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
+use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
+use Domain\Atendimento\Filters\FiltroListagemOS;
 use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
-use Infrastructure\Persistence\Eloquent\OSMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -42,14 +43,13 @@ class OSController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $filtros = array_filter([
+        $filtro = FiltroListagemOS::fromArray(array_filter([
             'cliente_id' => $request->query('cliente_id'),
             'status_id' => $request->query('status_id'),
             'veiculo_id' => $request->query('veiculo_id'),
-        ]);
+        ]));
 
-        $lista = $this->listarOS->executar($filtros);
-        $entities = $lista->map(fn($m) => OSMapper::toEntity($m));
+        $entities = $this->listarOS->executar($filtro);
 
         return OSResource::collection($entities);
     }
@@ -86,9 +86,9 @@ class OSController extends Controller
                 servicoId: (int) $request->servico_id,
             );
             return response()->json(['data' => [
-                'id' => $osServico->id,
-                'os_id' => $osServico->os_id,
-                'servico_id' => $osServico->servico_id,
+                'id' => $osServico->getId(),
+                'os_id' => $osServico->getOsId(),
+                'servico_id' => $osServico->getServicoId(),
             ]], 201);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -104,10 +104,10 @@ class OSController extends Controller
                 quantidade: (int) $request->quantidade,
             );
             return response()->json(['data' => [
-                'id' => $item->id,
-                'os_servico_id' => $item->os_servico_id,
-                'insumo_id' => $item->insumo_id,
-                'quantidade' => $item->quantidade,
+                'id' => $item->getId(),
+                'os_servico_id' => $item->getOsServicoId(),
+                'insumo_id' => $item->getInsumoId(),
+                'quantidade' => $item->getQuantidade(),
             ]], 201);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -120,27 +120,30 @@ class OSController extends Controller
             $orcamento = $this->gerarOrcamento->executar($id);
 
             return response()->json(['data' => [
-                'id' => $orcamento->id,
-                'os_id' => $orcamento->os_id,
-                'valor_total' => $orcamento->valor_total,
-                'status' => $orcamento->status,
-                'data_orcamento' => $orcamento->data_orcamento,
+                'id' => $orcamento->getId(),
+                'os_id' => $orcamento->getOsId(),
+                'valor_total' => $orcamento->getValorTotal(),
+                'status' => $orcamento->getStatus()->value,
+                'data_orcamento' => $orcamento->getDataOrcamento(),
+                'approval_token' => $orcamento->getApprovalToken(),
             ]], 201);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
 
-    public function aprovarOrcamento(int $id): JsonResponse
+    public function aprovarOrcamento(Request $request, int $id): JsonResponse
     {
         try {
-            $orcamento = $this->aprovarOrcamento->executar($id);
+            $orcamento = $this->aprovarOrcamento->executar($id, $this->extrairToken($request));
 
             return response()->json(['data' => [
-                'id' => $orcamento->id,
-                'status' => $orcamento->status,
-                'data_aprovacao' => $orcamento->data_aprovacao,
+                'id' => $orcamento->getId(),
+                'status' => $orcamento->getStatus()->value,
+                'data_aprovacao' => $orcamento->getDataAprovacao(),
             ]]);
+        } catch (TokenAprovacaoInvalido $e) {
+            return response()->json(['message' => $e->getMessage()], 401);
         } catch (EstoqueInsuficienteException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\RuntimeException $e) {
@@ -148,15 +151,27 @@ class OSController extends Controller
         }
     }
 
-    public function recusarOrcamento(int $id): JsonResponse
+    public function recusarOrcamento(Request $request, int $id): JsonResponse
     {
         try {
-            $orcamento = $this->recusarOrcamento->executar($id);
+            $orcamento = $this->recusarOrcamento->executar($id, $this->extrairToken($request));
 
-            return response()->json(['data' => ['id' => $orcamento->id, 'status' => $orcamento->status]]);
+            return response()->json(['data' => [
+                'id' => $orcamento->getId(),
+                'status' => $orcamento->getStatus()->value,
+            ]]);
+        } catch (TokenAprovacaoInvalido $e) {
+            return response()->json(['message' => $e->getMessage()], 401);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+    }
+
+    private function extrairToken(Request $request): ?string
+    {
+        $token = $request->input('token', $request->query('token'));
+
+        return is_string($token) && $token !== '' ? $token : null;
     }
 
     public function alterarStatus(PatchOSStatusRequest $request, int $id): JsonResponse

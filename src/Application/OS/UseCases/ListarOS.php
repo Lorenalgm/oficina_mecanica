@@ -2,27 +2,19 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OS as OSModel;
-use Illuminate\Database\Eloquent\Collection;
+use Domain\Atendimento\Entities\OS;
+use Domain\Atendimento\Filters\FiltroListagemOS;
+use Domain\Atendimento\Repositories\OSRepository;
 
 class ListarOS
 {
-    public function executar(array $filtros = []): Collection
+    public function __construct(private OSRepository $repositorio) {}
+
+    /**
+     * @return OS[]
+     */
+    public function executar(FiltroListagemOS $filtro): array
     {
-        $query = OSModel::with(['statusAtual', 'cliente', 'veiculo']);
-
-        if (isset($filtros['cliente_id'])) {
-            $query->where('cliente_id', $filtros['cliente_id']);
-        }
-
-        if (isset($filtros['status_id'])) {
-            $query->where('status_atual_id', $filtros['status_id']);
-        }
-
-        if (isset($filtros['veiculo_id'])) {
-            $query->where('veiculo_id', $filtros['veiculo_id']);
-        }
-
-        return $query->orderBy('created_at', 'asc')->get();
+        return $this->repositorio->findAll($filtro);
     }
 }

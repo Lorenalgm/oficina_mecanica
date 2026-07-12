@@ -2,24 +2,15 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OS as OSModel;
 use Domain\Atendimento\Entities\OS;
-use Infrastructure\Persistence\Eloquent\OSMapper;
+use Domain\Atendimento\Repositories\OSRepository;
 
 class DetalharOS
 {
+    public function __construct(private OSRepository $repositorio) {}
+
     public function executar(int $id): ?OS
     {
-        $model = OSModel::with([
-            'cliente',
-            'veiculo',
-            'statusAtual',
-            'servicos.servico',
-            'servicos.insumos.insumo',
-            'historicoStatus.status',
-            'orcamento',
-        ])->find($id);
-
-        return $model ? OSMapper::toDetailEntity($model) : null;
+        return $this->repositorio->findById($id);
     }
 }

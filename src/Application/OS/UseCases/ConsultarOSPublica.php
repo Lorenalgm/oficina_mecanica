@@ -2,28 +2,23 @@
 
 namespace Application\OS\UseCases;
 
-use App\Models\OS as OSModel;
+use Domain\Atendimento\Repositories\OSRepository;
 
 class ConsultarOSPublica
 {
+    public function __construct(private OSRepository $repositorio) {}
+
     public function executar(string $documento, string $placa): ?array
     {
-        $documentoNormalizado = preg_replace('/\D/', '', $documento);
-        $placaNormalizada = strtoupper(trim($placa));
-
-        $os = OSModel::with(['statusAtual', 'cliente', 'veiculo'])
-            ->whereHas('cliente', fn ($q) => $q->where('documento', $documentoNormalizado))
-            ->whereHas('veiculo', fn ($q) => $q->where('placa', $placaNormalizada))
-            ->latest()
-            ->first();
+        $os = $this->repositorio->findPublica($documento, $placa);
 
         if (!$os) {
             return null;
         }
 
         return [
-            'status_atual' => $os->statusAtual->nome,
-            'descricao_problema' => $os->descricao_problema,
+            'status_atual' => $os->getStatusAtualNome(),
+            'descricao_problema' => $os->getDescricaoProblema(),
         ];
     }
 }
