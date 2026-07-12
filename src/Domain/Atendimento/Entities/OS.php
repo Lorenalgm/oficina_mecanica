@@ -3,6 +3,7 @@
 namespace Domain\Atendimento\Entities;
 
 use DateTimeInterface;
+use RuntimeException;
 
 class OS
 {
@@ -46,5 +47,53 @@ class OS
     public function alterarStatus(int $novoStatusId): void
     {
         $this->statusAtualId = $novoStatusId;
+    }
+
+    /**
+     * Calcula o valor total do orçamento somando o valor de cada serviço e
+     * o valor dos insumos (valor unitário × quantidade) associados à OS.
+     * Exige que os serviços tenham sido carregados com seus valores.
+     */
+    public function calcularValorOrcamento(): float
+    {
+        if (empty($this->servicos)) {
+            throw new RuntimeException('A OS não possui serviços para gerar orçamento.');
+        }
+
+        $valorTotal = 0.0;
+
+        /** @var OSServico $servico */
+        foreach ($this->servicos as $servico) {
+            $valorTotal += (float) $servico->getServicoValor();
+
+            /** @var OSServicoInsumo $insumo */
+            foreach ($servico->getInsumos() ?? [] as $insumo) {
+                $valorTotal += (float) $insumo->getInsumoValor() * $insumo->getQuantidade();
+            }
+        }
+
+        return $valorTotal;
+    }
+
+    /**
+     * Lista os insumos consumidos pela OS agregados por insumo, para aplicar
+     * a baixa de estoque na aprovação do orçamento.
+     *
+     * @return array<int, int> insumoId => quantidade total
+     */
+    public function insumosConsumidos(): array
+    {
+        $consumo = [];
+
+        /** @var OSServico $servico */
+        foreach ($this->servicos ?? [] as $servico) {
+            /** @var OSServicoInsumo $insumo */
+            foreach ($servico->getInsumos() ?? [] as $insumo) {
+                $insumoId = $insumo->getInsumoId();
+                $consumo[$insumoId] = ($consumo[$insumoId] ?? 0) + $insumo->getQuantidade();
+            }
+        }
+
+        return $consumo;
     }
 }

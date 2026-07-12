@@ -14,6 +14,7 @@ class OSOrcamento
         private DateTimeInterface $dataOrcamento,
         private ?DateTimeInterface $dataAprovacao,
         private StatusOrcamento $status,
+        private ?string $approvalToken = null,
     ) {}
 
     public function getId(): ?int { return $this->id; }
@@ -22,20 +23,31 @@ class OSOrcamento
     public function getDataOrcamento(): DateTimeInterface { return $this->dataOrcamento; }
     public function getDataAprovacao(): ?DateTimeInterface { return $this->dataAprovacao; }
     public function getStatus(): StatusOrcamento { return $this->status; }
+    public function getApprovalToken(): ?string { return $this->approvalToken; }
 
     public function aprovar(DateTimeInterface $dataAprovacao): void
     {
         $this->status = StatusOrcamento::Aprovado;
         $this->dataAprovacao = $dataAprovacao;
+        $this->invalidarToken();
     }
 
     public function recusar(): void
     {
         $this->status = StatusOrcamento::Recusado;
+        $this->invalidarToken();
     }
 
     public function isPendente(): bool
     {
         return $this->status === StatusOrcamento::Pendente;
+    }
+
+    /**
+     * Invalida o token de aprovação (uso único), evitando replay após aprovar/recusar.
+     */
+    public function invalidarToken(): void
+    {
+        $this->approvalToken = null;
     }
 }
