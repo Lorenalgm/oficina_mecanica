@@ -23,7 +23,7 @@ class CalcularTempoMedioTest extends TestCase
     {
         parent::setUp();
         $this->seed(StatusSeeder::class);
-        $this->useCase = new CalcularTempoMedio();
+        $this->useCase = app(CalcularTempoMedio::class);
 
         $cliente = Cliente::factory()->create();
         $veiculo = Veiculo::factory()->create(['cliente_id' => $cliente->id]);

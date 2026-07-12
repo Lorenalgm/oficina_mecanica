@@ -10,9 +10,9 @@ use App\Models\OSServicoInsumo;
 use App\Models\Status;
 use App\Models\Cliente;
 use App\Models\Veiculo;
-use App\Models\User;
 use Application\OS\UseCases\AprovarOrcamento;
 use Database\Seeders\StatusSeeder;
+use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -29,7 +29,7 @@ class AprovarOrcamentoTest extends TestCase
     {
         parent::setUp();
         $this->seed(StatusSeeder::class);
-        $this->useCase = new AprovarOrcamento();
+        $this->useCase = app(AprovarOrcamento::class);
 
         $cliente = Cliente::factory()->create();
         $veiculo = Veiculo::factory()->create(['cliente_id' => $cliente->id]);
@@ -52,34 +52,69 @@ class AprovarOrcamentoTest extends TestCase
         ]);
     }
 
-    public function test_aprovacao_com_sucesso_reduz_estoque_e_muda_status(): void
+    private function criarOrcamento(string $status = 'pendente', ?string $token = 'token-valido'): void
     {
         OSOrcamento::create([
             'os_id' => $this->os->id,
             'valor_total' => 200.00,
             'data_orcamento' => now(),
-            'status' => 'pendente',
+            'status' => $status,
+            'approval_token' => $token,
         ]);
+    }
 
-        $resultado = $this->useCase->executar($this->os->id);
+    public function test_aprovacao_com_token_valido_reduz_estoque_e_muda_status(): void
+    {
+        $this->criarOrcamento();
 
-        $this->assertEquals('aprovado', $resultado->status);
-        $this->assertNotNull($resultado->data_aprovacao);
+        $resultado = $this->useCase->executar($this->os->id, 'token-valido');
+
+        $this->assertEquals('aprovado', $resultado->getStatus()->value);
+        $this->assertNotNull($resultado->getDataAprovacao());
         $this->assertEquals(7, $this->insumo->fresh()->quantidade_estoque);
+
+        $statusEmExecucao = Status::where('nome', 'Em execução')->first();
+        $this->assertEquals($statusEmExecucao->id, $this->os->fresh()->status_atual_id);
+    }
+
+    public function test_token_invalido_e_rejeitado(): void
+    {
+        $this->criarOrcamento();
+
+        $this->expectException(TokenAprovacaoInvalido::class);
+        $this->useCase->executar($this->os->id, 'token-errado');
+    }
+
+    public function test_token_ausente_e_rejeitado(): void
+    {
+        $this->criarOrcamento();
+
+        $this->expectException(TokenAprovacaoInvalido::class);
+        $this->useCase->executar($this->os->id, null);
+    }
+
+    public function test_token_invalidado_apos_uso_impede_replay(): void
+    {
+        $this->criarOrcamento();
+
+        $this->useCase->executar($this->os->id, 'token-valido');
+
+        // Token já consumido — segunda tentativa não encontra a OS pelo token.
+        $this->expectException(TokenAprovacaoInvalido::class);
+        $this->useCase->executar($this->os->id, 'token-valido');
     }
 
     public function test_estoque_insuficiente_faz_rollback_completo(): void
     {
         $this->insumo->update(['quantidade_estoque' => 1]);
-        OSOrcamento::create([
-            'os_id' => $this->os->id,
-            'valor_total' => 200.00,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-        ]);
+        $this->criarOrcamento();
 
-        $this->expectException(EstoqueInsuficienteException::class);
-        $this->useCase->executar($this->os->id);
+        try {
+            $this->useCase->executar($this->os->id, 'token-valido');
+            $this->fail('Esperava EstoqueInsuficienteException.');
+        } catch (EstoqueInsuficienteException $e) {
+            // esperado
+        }
 
         $this->assertEquals(1, $this->insumo->fresh()->quantidade_estoque);
         $orcamento = OSOrcamento::where('os_id', $this->os->id)->first();
@@ -88,15 +123,10 @@ class AprovarOrcamentoTest extends TestCase
 
     public function test_aprovar_orcamento_ja_aprovado_lanca_excecao(): void
     {
-        OSOrcamento::create([
-            'os_id' => $this->os->id,
-            'valor_total' => 200.00,
-            'data_orcamento' => now(),
-            'status' => 'aprovado',
-        ]);
+        $this->criarOrcamento('aprovado');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('pendentes');
-        $this->useCase->executar($this->os->id);
+        $this->useCase->executar($this->os->id, 'token-valido');
     }
 }

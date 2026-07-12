@@ -13,7 +13,7 @@ class CalcularTempoMedioSemStatusTest extends TestCase
     public function test_retorna_null_quando_status_nao_existem(): void
     {
         // Banco limpo sem seeder — nenhum registro em "status"
-        $resultado = (new CalcularTempoMedio())->executar();
+        $resultado = app(CalcularTempoMedio::class)->executar();
 
         $this->assertNull($resultado);
     }
