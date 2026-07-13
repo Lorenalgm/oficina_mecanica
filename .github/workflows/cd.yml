@@ -21,8 +21,10 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo, pdo_sqlite, zip, mbstring, bcmath
-          coverage: none
+          # pcov é necessário: o phpunit.xml configura relatório de cobertura,
+          # e sem um driver o `php artisan test` sai com exit 1 mesmo com tudo verde.
+          extensions: pcov, pdo, pdo_sqlite, zip, mbstring, bcmath
+          coverage: pcov
 
       - name: Install dependencies
         run: composer install --no-interaction --optimize-autoloader
