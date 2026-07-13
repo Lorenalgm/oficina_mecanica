@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-api-migrate
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-api
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 6
+  # Job de migração/seed — roda UMA vez, separado dos pods da aplicação.
+  # Os seeders são idempotentes (updateOrInsert / updateOrCreate).
+  template:
+    metadata:
+      # Label distinto de propósito: NÃO usar app.kubernetes.io/name: oficina-api,
+      # senão o seletor do Deployment/Service/HPA casaria com este pod (que não
+      # tem requests.cpu) e quebraria o cálculo de métricas do HPA.
+      labels:
+        app.kubernetes.io/name: oficina-api-migrate
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        # Aguarda o Postgres aceitar conexões antes de migrar.
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME"; do
+                echo "aguardando o banco em $DB_HOST:$DB_PORT..."
+                sleep 2
+              done
+          envFrom:
+            - configMapRef:
+                name: oficina-api-config
+      containers:
+        - name: migrate
+          image: ghcr.io/lorenalgm/oficina-api:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              php artisan migrate --force && php artisan db:seed --force
+          envFrom:
+            - configMapRef:
+                name: oficina-api-config
+            - secretRef:
+                name: oficina-api-secrets

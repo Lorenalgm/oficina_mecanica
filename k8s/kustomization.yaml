@@ -1,0 +1,23 @@
+# Aplica os manifestos da APLICAÇÃO com:
+#   kubectl apply -k k8s/
+#
+# Pré-requisitos (provisionados pelo Terraform em /infra, OU manualmente):
+#   - namespace "oficina"            (k8s/namespace.yaml)
+#   - Secret "oficina-api-secrets"   (Terraform, a partir de tfvars)
+#   - Postgres em execução           (k8s/postgres.yaml)
+#
+# O migrate-job tem um initContainer que aguarda o banco ficar pronto,
+# então a ordem de aplicação em relação ao Postgres não é crítica.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: oficina
+
+resources:
+  - configmap.yaml
+  - migrate-job.yaml
+  - app-deployment.yaml
+  - app-service.yaml
+  - hpa.yaml
+  # namespace.yaml, postgres.yaml e secret.example.yaml NÃO entram aqui:
+  # namespace/secret/banco são provisionados pelo Terraform (ou aplicados à parte).

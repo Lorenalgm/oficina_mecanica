@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-api-config
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-api
+data:
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  APP_URL: "http://localhost:8080"
+  LOG_CHANNEL: "stderr"
+
+  DB_CONNECTION: "pgsql"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_DATABASE: "oficina"
+  DB_USERNAME: "oficina"
+
+  CACHE_STORE: "file"
+  SESSION_DRIVER: "file"
+  QUEUE_CONNECTION: "sync"
+
+  # Em cluster o mailer padrão é "log" (não envia de verdade, mas registra).
+  # Troque para "resend" para enviar via Resend usando o RESEND_API_KEY do Secret.
+  MAIL_MAILER: "log"
+  MAIL_FROM_ADDRESS: "oficina@example.com"
+  MAIL_FROM_NAME: "Oficina Mecanica"

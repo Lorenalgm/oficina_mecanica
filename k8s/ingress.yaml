@@ -1,0 +1,24 @@
+# Acesso externo via Ingress (opcional).
+# Requer um Ingress Controller no cluster (ex.: ingress-nginx).
+# Alternativa mais simples para a demo local:
+#   kubectl -n oficina port-forward svc/oficina-api 8080:80
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oficina-api
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-api
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: oficina.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oficina-api
+                port:
+                  number: 80
