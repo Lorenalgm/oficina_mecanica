@@ -24,3 +24,25 @@ yarn-error.log
 /.zed
 .claude
 coverage.xml
+
+# Terraform (infra/)
+**/.terraform/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# Kubernetes secrets com valores reais (mantém apenas *.example.yaml)
+k8s/secret.yaml
+
+# kubeconfig gerado pelo kind/terraform (contém certificados — sensível)
+infra/*-config
