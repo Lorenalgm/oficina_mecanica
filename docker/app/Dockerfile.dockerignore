@@ -1,0 +1,23 @@
+# Ignore específico da imagem de produção (docker/app/Dockerfile).
+# Não afeta o build do Railway (que usa o Dockerfile da raiz).
+.git
+.github
+.env
+.env.*
+.env.sh
+vendor
+node_modules
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+bootstrap/cache/*.php
+tests
+k8s
+infra
+load
+openspec
+coverage.xml
+docker-compose.yml
+railway.json
