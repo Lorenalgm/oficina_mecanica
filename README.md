@@ -98,6 +98,120 @@ php artisan test
 php artisan test --coverage --min=80
 ```
 
+## Infraestrutura: Kubernetes, Terraform e CI/CD
+
+Esta fase adiciona uma **camada de infraestrutura** que roda a mesma aplicação orquestrada em **Kubernetes**, provisionada por **Terraform (IaC)** e entregue por uma **pipeline CI/CD**, com **escalabilidade automática (HPA)**. É **independente e paralela** ao deploy no Railway — não usa nem referencia o `Dockerfile` da raiz, o `railway.json` ou o entrypoint do Railway.
+
+**Objetivos:** empacotar a aplicação em imagem de produção (FrankenPHP), orquestrá-la em K8s (Deployment, Service, ConfigMap, Secret, HPA, Postgres StatefulSet, Job de migração), provisionar o cluster/banco/segredos via Terraform e demonstrar autoscaling sob carga.
+
+### Componentes e infraestrutura provisionada
+
+```
+   TERRAFORM (/infra)  →  plataforma          KUBECTL (/k8s)  →  aplicação
+   ├─ cluster kind (control-plane + worker)   ├─ ConfigMap (config não-sensível)
+   ├─ metrics-server (habilita o HPA)         ├─ Job migrate (migrate + seed, 1x)
+   ├─ namespace "oficina"                     ├─ Deployment app (FrankenPHP, N réplicas)
+   ├─ Secret (APP_KEY, DB_PASSWORD, RESEND)   ├─ Service (ClusterIP) + Ingress opcional
+   └─ Postgres (StatefulSet + Service + PVC)  └─ HPA (CPU ~50%, 2→10 réplicas)
+
+                    ┌───────────────── cluster kind ─────────────────┐
+   k6 (/load) ─────▶│ Service ▶ pods app ─CPU▶ metrics-server ▶ HPA │
+                    │                              └─ escala pods ───┘│
+                    │            Job migrate ▶ Postgres (PVC)         │
+                    └────────────────────────────────────────────────┘
+```
+
+### Fluxo de deploy
+
+```
+  git push main
+      │
+      ▼  ci.yml  → testes + SonarCloud            (inalterado)
+      ▼  cd.yml  → build → testes → imagem GHCR
+                   → kind efêmero → kind load
+                   → metrics-server + namespace + secret + Postgres
+                   → kubectl apply -k k8s/ (app)
+                   → smoke test (GET /up)
+```
+
+> **Estratégia de deploy no CI:** como o ambiente é local (sem cloud paga), o `cd.yml` faz o deploy num **cluster kind efêmero dentro do runner** — prova que os manifestos sobem ponta-a-ponta e roda um smoke test — e é destruído ao fim. O **ambiente persistente** para uso/demonstração é o kind local (abaixo). O Railway segue independente.
+
+### Provisionamento com Terraform (`/infra`)
+
+Provisiona cluster + metrics-server + namespace + Secret + Postgres. Detalhes e tabela de recursos em [`infra/README.md`](infra/README.md).
+
+**Pré-requisitos:** Docker (rodando), `kind`, `kubectl`, `terraform`, `helm` e `k6`
+(no macOS: `brew install kind kubectl terraform helm k6`).
+
+### Passo a passo local (do zero)
+
+```bash
+# 0. APP_KEY e variáveis sensíveis (não versionadas)
+cd infra
+cp terraform.tfvars.example terraform.tfvars
+php ../artisan key:generate --show   # copie o "base64:..." para app_key no terraform.tfvars
+#   (sem PHP à mão? use: echo "base64:$(openssl rand -base64 32)")
+
+# 1. Provisionar a plataforma (cluster kind + metrics-server + namespace + secret + Postgres)
+terraform init
+terraform apply        # confirme com "yes"
+
+# 2. Apontar o kubectl para o cluster (o Terraform gera este kubeconfig)
+export KUBECONFIG="$PWD/oficina-config"
+kubectl get nodes
+
+# 3. Construir a imagem de produção e carregá-la no kind
+cd ..
+docker build -f docker/app/Dockerfile -t ghcr.io/lorenalgm/oficina-api:latest .
+kind load docker-image ghcr.io/lorenalgm/oficina-api:latest --name oficina
+
+# 4. Implantar a aplicação (ConfigMap, Job de migração, Deployment, Service, HPA)
+kubectl apply -k k8s/
+kubectl -n oficina rollout status deployment/oficina-api
+
+# 5. Acessar a API (mantenha este terminal aberto)
+kubectl -n oficina port-forward svc/oficina-api 8080:80
+# -> em outro terminal:  curl http://localhost:8080/up
+```
+
+> O `KUBECONFIG` precisa apontar para `infra/oficina-config` em todo terminal novo
+> (`export KUBECONFIG=.../oficina-api/infra/oficina-config`).
+
+### Demonstração de autoscaling (HPA + k6)
+
+Com a aplicação no ar e o `port-forward` ativo (passo 5), em **três terminais**
+(todos com o `KUBECONFIG` exportado):
+
+```bash
+# terminal A — expõe a API
+kubectl -n oficina port-forward svc/oficina-api 8080:80
+
+# terminal B — observa o HPA e os pods escalando ao vivo
+kubectl -n oficina get hpa,pods -w
+
+# terminal C — dispara a carga
+BASE_URL=http://localhost:8080 k6 run load/load-test.js
+```
+
+Sob carga (login → cria cliente/veículo → múltiplas `POST /api/os` + listagens), a CPU
+ultrapassa o alvo (50%) e o HPA **aumenta as réplicas de 2 até 10**; ao cessar a carga,
+após a janela de estabilização, **reduz de volta a 2**. Verificado localmente:
+`2 → 4 → 6 → 8 → 10` durante o ramp-up. Detalhes em [`load/README.md`](load/README.md).
+
+### Limpeza
+
+```bash
+cd infra && terraform destroy   # remove o cluster kind inteiro (Railway não é afetado)
+```
+
+### Imagem de produção (FrankenPHP)
+
+`docker/app/Dockerfile` gera a imagem de produção publicada no GHCR (`ghcr.io/lorenalgm/oficina-api`), servindo `public/index.php` via FrankenPHP em modo clássico, sem executar migrate/seed no start (isso é responsabilidade do Job).
+
+## Collection de APIs
+
+Especificação OpenAPI em [`openapi.yaml`](openapi.yaml) — importe no Insomnia/Postman/Swagger. Base local: `http://localhost:8080`; produção (Railway): ver topo do README.
+
 ## Endpoints
 
 ### Autenticação
