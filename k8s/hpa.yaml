@@ -12,6 +12,7 @@ spec:
     name: oficina-api
   minReplicas: 2
   maxReplicas: 10
+  # Escala pela métrica mais pressionada entre CPU e memória.
   metrics:
     - type: Resource
       resource:
@@ -19,6 +20,12 @@ spec:
         target:
           type: Utilization
           averageUtilization: 50
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0
