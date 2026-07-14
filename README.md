@@ -4,6 +4,7 @@ Back-end de gestão de uma oficina mecânica: uma **API REST** em **Laravel 11**
 
 ## Sumário
 
+- [Solução e objetivos da Fase 2](#solução-e-objetivos-da-fase-2)
 - [Testar a API em produção](#testar-a-api-em-produção)
 - [Stack e justificativas](#stack-e-justificativas)
 - [Arquitetura da aplicação](#arquitetura-da-aplicação)
@@ -11,6 +12,21 @@ Back-end de gestão de uma oficina mecânica: uma **API REST** em **Laravel 11**
 - [Executar a aplicação localmente](#executar-a-aplicação-localmente)
 - [Infraestrutura: Kubernetes, Terraform e CI/CD](#infraestrutura-kubernetes-terraform-e-cicd)
 - [Referência da API](#referência-da-api)
+
+## Solução e objetivos da Fase 2
+
+Na Fase 1 a oficina ganhou um sistema para gerir ordens de serviço, veículos, clientes e peças. Com o aumento da demanda e a expansão para novas unidades, a Fase 2 evolui a aplicação para **qualidade, resiliência e escalabilidade**, incorporando práticas modernas de infraestrutura e automação.
+
+**O que foi entregue nesta fase:**
+
+- **Refatoração para arquitetura hexagonal (DDD):** os casos de uso dependem apenas de interfaces de domínio (portas), sem acoplamento a `App\Models` ou à facade `DB`. Camadas separadas em `src/Domain`, `src/Application` e `src/Infrastructure`, com testes automatizados cobrindo os fluxos críticos.
+- **Evolução das APIs de OS:** abertura de OS (cliente, veículo, serviços e peças) retornando o identificador único; consulta de status; **listagem ordenada por prioridade de status** (Em Execução → Aguardando Aprovação → Diagnóstico → Recebida), mais antigas primeiro, excluindo logicamente as Finalizadas/Entregues; **aprovação/recusa de orçamento** por webhook público protegido por token de uso único; e **notificação de mudança de status por e-mail** (Resend).
+- **Containerização:** imagem de produção com Docker/FrankenPHP e `docker-compose` para desenvolvimento local.
+- **Orquestração em Kubernetes:** manifestos em [`/k8s`](k8s) (Deployment, Service, ConfigMap, Secret e HPA por CPU **e** memória).
+- **Infraestrutura como Código:** scripts Terraform em [`/infra`](infra) provisionando o cluster (kind), o metrics-server, o namespace, o Secret e o banco de dados.
+- **CI/CD (GitHub Actions):** build, testes automatizados, build e publicação da imagem, e deploy dos manifestos no cluster.
+
+O detalhamento de cada ponto está nas seções a seguir.
 
 ## Testar a API em produção
 
@@ -126,15 +142,16 @@ php artisan test                        # suíte completa (SQLite em memória)
 php artisan test --coverage --min=80    # com cobertura (requer PCOV ou Xdebug)
 ```
 
-**Notificações por e-mail (Resend).** A alteração de status de uma OS dispara um e-mail ao cliente via [`resend/resend-laravel`](https://github.com/resend/resend-laravel). Se o cliente não tiver e-mail cadastrado, a operação conclui normalmente (apenas registra em log). Configure no `.env` (a chave real nunca é versionada):
+**Notificações por e-mail (Resend).** A alteração de status de uma OS dispara um e-mail ao cliente via [`resend/resend-laravel`](https://github.com/resend/resend-laravel). Se o cliente não tiver e-mail cadastrado, a operação conclui normalmente (apenas registra em log). Configure no `.env`:
 
 ```dotenv
 MAIL_MAILER=resend
-MAIL_FROM_ADDRESS="oficina@seudominio.com"
-RESEND_API_KEY=          # sua chave da Resend
+MAIL_FROM_ADDRESS="onboarding@resend.dev"   # remetente de teste do Resend (sem verificar domínio)
+MAIL_FROM_NAME="Oficina Mecânica"
+RESEND_API_KEY=                             # sua chave da Resend
 ```
 
-Nos testes usa-se `Mail::fake()`, portanto nenhuma chave real é necessária.
+> `onboarding@resend.dev` entrega apenas para o e-mail dono da conta Resend; em produção, use um remetente de domínio verificado. Uma falha de envio nunca interrompe a troca de status (é registrada em log). Nos testes usa-se `Mail::fake()`, portanto nenhuma chave real é necessária.
 
 ## Infraestrutura: Kubernetes, Terraform e CI/CD
 
@@ -319,6 +336,22 @@ Contrato completo em [`openapi.yaml`](openapi.yaml).
 | POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | ✓ | Adicionar insumo ao serviço |
 | POST | `/api/os/{id}/orcamento` | ✓ | Gerar orçamento → *Aguardando aprovação*; retorna o `approval_token` |
 | GET | `/api/os/tempo-medio` | ✓ | Tempo médio de execução (minutos) |
+
+**Abertura (`POST /api/os`):** exige `cliente_id`, `veiculo_id` e `descricao_problema`. Serviços e peças (insumos) são **opcionais** na abertura e podem vir aninhados — cada peça é vinculada a um serviço:
+
+```json
+{
+  "cliente_id": 1,
+  "veiculo_id": 1,
+  "descricao_problema": "Barulho na suspensão",
+  "servicos": [
+    { "servico_id": 3, "insumos": [ { "insumo_id": 5, "quantidade": 2 } ] },
+    { "servico_id": 4 }
+  ]
+}
+```
+
+Também é possível abrir a OS só com os dados obrigatórios e adicionar serviços/peças depois pelos endpoints `POST /api/os/{id}/servicos` e `.../insumos`. Retorna **201** com o identificador único da OS.
 
 **Listagem (`GET /api/os`):** ordenada por prioridade de status (*Em execução* > *Aguardando aprovação* > *Em diagnóstico* > *Recebida*); OS *Finalizada* e *Entregue* são omitidas da listagem. No mesmo status, as mais antigas vêm primeiro. Filtros `cliente_id`, `veiculo_id` e `status_id` disponíveis.
 
