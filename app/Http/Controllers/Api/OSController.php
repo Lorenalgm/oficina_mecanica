@@ -60,6 +60,7 @@ class OSController extends Controller
             veiculoId: (int) $request->veiculo_id,
             clienteId: (int) $request->cliente_id,
             descricaoProblema: $request->descricao_problema,
+            servicos: $request->input('servicos', []),
         );
 
         $modelo = $this->detalharOS->executar($os->getId());
