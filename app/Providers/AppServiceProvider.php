@@ -2,9 +2,6 @@
 
 namespace App\Providers;
 
-use App\Listeners\EnviarEmailStatusOS;
-use Domain\Atendimento\Events\StatusOSAlterado;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Event::listen(StatusOSAlterado::class, EnviarEmailStatusOS::class);
+        // O listener EnviarEmailStatusOS é registrado automaticamente pela
+        // auto-descoberta de eventos do Laravel 11 (varre app/Listeners pelo
+        // type-hint do método handle). Registrá-lo aqui também causaria envio duplicado.
     }
 }
