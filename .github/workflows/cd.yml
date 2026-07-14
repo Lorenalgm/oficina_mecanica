@@ -84,7 +84,7 @@ jobs:
           kubectl -n oficina create secret generic oficina-api-secrets \
             --from-literal=APP_KEY="base64:$(openssl rand -base64 32)" \
             --from-literal=DB_PASSWORD="ci-postgres-pass" \
-            --from-literal=RESEND_API_KEY=""
+            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}"
           kubectl apply -f k8s/postgres.yaml
           kubectl -n oficina rollout status statefulset/postgres --timeout=180s
 

@@ -21,8 +21,11 @@ data:
   SESSION_DRIVER: "file"
   QUEUE_CONNECTION: "sync"
 
-  # Em cluster o mailer padrão é "log" (não envia de verdade, mas registra).
-  # Troque para "resend" para enviar via Resend usando o RESEND_API_KEY do Secret.
-  MAIL_MAILER: "log"
-  MAIL_FROM_ADDRESS: "oficina@example.com"
+  # Envio de e-mail via Resend. A chave sensível (RESEND_API_KEY) vem do Secret.
+  # onboarding@resend.dev é o remetente de teste do Resend: funciona sem verificar
+  # domínio, mas só entrega para o e-mail dono da conta. Em produção, troque por um
+  # remetente de domínio verificado. Sem chave válida o envio falha e é apenas logado
+  # (ver App\Listeners\EnviarEmailStatusOS), sem afetar a troca de status.
+  MAIL_MAILER: "resend"
+  MAIL_FROM_ADDRESS: "onboarding@resend.dev"
   MAIL_FROM_NAME: "Oficina Mecanica"
