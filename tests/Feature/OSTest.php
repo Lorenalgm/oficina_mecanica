@@ -76,6 +76,40 @@ class OSTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_criar_os_com_servicos_e_pecas(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Revisão completa',
+            'servicos' => [
+                [
+                    'servico_id' => $this->servico->id,
+                    'insumos' => [
+                        ['insumo_id' => $this->insumo->id, 'quantidade' => 2],
+                    ],
+                ],
+            ],
+        ], $this->headers())
+            ->assertStatus(201)
+            ->assertJsonPath('data.servicos.0.servico_id', $this->servico->id)
+            ->assertJsonPath('data.servicos.0.insumos.0.insumo_id', $this->insumo->id)
+            ->assertJsonPath('data.servicos.0.insumos.0.quantidade', 2);
+    }
+
+    public function test_criar_os_com_servico_inexistente_retorna_422(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Revisão',
+            'servicos' => [
+                ['servico_id' => 9999],
+            ],
+        ], $this->headers())
+            ->assertStatus(422);
+    }
+
     public function test_listar_os(): void
     {
         $this->criarOS();
