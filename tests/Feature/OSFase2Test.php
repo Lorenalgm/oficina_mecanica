@@ -189,6 +189,9 @@ class OSFase2Test extends TestCase
             StatusOSAtualizado::class,
             fn (StatusOSAtualizado $mail) => $mail->hasTo($this->cliente->email),
         );
+
+        // O listener não pode ser registrado em duplicidade (evita e-mail duplicado).
+        Mail::assertSent(StatusOSAtualizado::class, 1);
     }
 
     public function test_cliente_sem_email_nao_impede_alteracao_de_status(): void
