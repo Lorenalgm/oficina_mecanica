@@ -582,6 +582,24 @@ paths:
                 veiculo_id: { type: integer }
                 cliente_id: { type: integer }
                 descricao_problema: { type: string, example: Barulho no motor ao acelerar }
+                servicos:
+                  type: array
+                  description: >-
+                    Serviços e peças (insumos) opcionais na abertura. Cada peça é
+                    vinculada a um serviço.
+                  items:
+                    type: object
+                    required: [servico_id]
+                    properties:
+                      servico_id: { type: integer }
+                      insumos:
+                        type: array
+                        items:
+                          type: object
+                          required: [insumo_id]
+                          properties:
+                            insumo_id: { type: integer }
+                            quantidade: { type: integer, minimum: 1, default: 1 }
       responses:
         201:
           description: OS criada
