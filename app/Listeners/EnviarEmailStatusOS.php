@@ -25,10 +25,17 @@ class EnviarEmailStatusOS
         $status = Status::find($event->statusNovoId);
         $statusNome = $status?->nome ?? (string) $event->statusNovoId;
 
-        Mail::to($cliente->email)->send(new StatusOSAtualizado(
-            osId: (int) $os->getId(),
-            statusNome: $statusNome,
-            clienteNome: $cliente->nome,
-        ));
+        // A notificação é um efeito secundário: uma falha no envio (chave inválida,
+        // domínio não verificado, indisponibilidade do provedor) não deve quebrar a
+        // troca de status da OS. Registramos o erro e seguimos.
+        try {
+            Mail::to($cliente->email)->send(new StatusOSAtualizado(
+                osId: (int) $os->getId(),
+                statusNome: $statusNome,
+                clienteNome: $cliente->nome,
+            ));
+        } catch (\Throwable $e) {
+            Log::error("OS #{$os->getId()}: falha ao enviar e-mail de status: {$e->getMessage()}");
+        }
     }
 }
