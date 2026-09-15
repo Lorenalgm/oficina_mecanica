@@ -25,14 +25,56 @@ data "aws_iam_role" "lambda" {
 }
 ```
 
-No módulo do EKS, isso significa `create_iam_role = false` e `iam_role_arn`
-apontando para a `LabRole`, tanto no cluster quanto no node group. Também ficam
-desligadas a chave KMS de criptografia de secrets e o log group do control plane
-(`create_kms_key = false`, `cluster_enabled_log_types = []`), pela mesma
-restrição de IAM — e, de quebra, isso evita gastar orçamento com CloudWatch.
+No EKS, o cluster e o node group apontam `role_arn` / `node_role_arn` para a
+`LabRole`. Também ficam desligadas a chave KMS de criptografia de secrets e o log
+group do control plane (`enabled_cluster_log_types = []`), pela mesma restrição
+de IAM — e, de quebra, isso evita gastar orçamento com CloudWatch.
 
 O nome da role é **variável, não literal**. Fora do Learner Lab, basta apontar
 `lambda_role_name` / `iam_role_name` para roles dedicadas.
+
+## O módulo comunitário do EKS é incompatível com o Learner Lab
+
+O caminho natural seria `terraform-aws-modules/eks/aws`, e foi o que se tentou
+primeiro. Ele **não funciona neste ambiente**, e a falha não é contornável por
+configuração:
+
+```
+Error: unable to get role (voclabs): api error AccessDenied: not authorized to
+perform: iam:GetRole on resource: role voclabs with an explicit deny in an
+identity-based policy: arn:aws:iam::<conta>:policy/Pvoclabs2
+  with module.eks.data.aws_iam_session_context.current[0]
+```
+
+O módulo resolve o ARN da sessão que roda o `apply` para conceder acesso admin ao
+cluster. Esse `data "aws_iam_session_context" "current"` tem
+`count = local.create ? 1 : 0` — ou seja, é **avaliado sempre**, e não está
+condicionado a `enable_cluster_creator_admin_permissions`. Desligar essa flag e
+declarar `access_entries` explicitamente não evita a chamada: a tentativa foi
+feita e falhou de forma idêntica.
+
+Foram verificadas as versões v20.24.0, v20.26, v20.28, v20.29, v20.30.1, v20.31.0,
+v20.31.6, v20.33.1, v20.37.2, v21.0.0, v21.3.1 e v21.5.0 — **todas** chamam
+`iam:GetRole` incondicionalmente.
+
+**Decisão:** substituir o módulo por recursos nativos do provider
+(`aws_eks_cluster`, `aws_eks_node_group`, `aws_eks_addon`,
+`aws_eks_access_entry`, `aws_eks_access_policy_association`). O acesso admin ao
+cluster passa a ser concedido por uma *access entry* explícita, com o ARN da role
+derivado de `aws_caller_identity` por `regex` — sem nenhuma chamada a IAM:
+
+```hcl
+access_config {
+  authentication_mode                         = "API"
+  bootstrap_cluster_creator_admin_permissions = false
+}
+```
+
+A alternativa seria forkar o módulo para remover o `data source`, o que criaria
+uma dependência de manutenção própria para ganhar pouco: o módulo entrega
+sobretudo conveniência de rede e IAM, e aqui a rede vem do `oficina-infra-db` e o
+IAM está fixado na `LabRole`. Em ~135 linhas de recursos nativos o comportamento
+fica explícito e legível.
 
 ## Justificativa
 
@@ -64,3 +106,10 @@ do git preserva a versão correta.
   AWS e passa a depender do código. Aceito para escopo acadêmico.
 - As credenciais do Learner Lab expiram a cada sessão de 4 horas e incluem
   `aws_session_token`; os workflows de CD enviam os três valores.
+- Sem o módulo, o que ele fazia de graça passa a ser responsabilidade do código:
+  os addons (`vpc-cni`, `kube-proxy`, `coredns`), a ordem entre node group e
+  addons, e a regra de security group que libera os nodes para o RDS estão
+  declarados um a um em `oficina-infra-k8s/terraform/eks.tf`.
+- O ALB Ingress Controller continua fora de alcance por outro motivo: ele exige
+  IRSA, que depende de `iam:CreateRole`. O ingress usa **NLB** via anotações do
+  `ingress-nginx`.
