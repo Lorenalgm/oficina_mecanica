@@ -19,7 +19,7 @@ CPU, memória e reinícios de pod vêm do `newrelic-infrastructure` como
 |---|---|---|
 | `http_request` | `App\Http\Middleware\LogRequest` | `method`, `route`, `path`, `status`, `duration_ms`, `cliente_id`, `ip` |
 | `os_created` | `OSController::store` | `os_id`, `cliente_id`, `veiculo_id` |
-| `os_status_changed` | `App\Listeners\RegistrarMetricasOS` | `os_id`, `status_anterior`, `status_novo`, `duracao_status_min` |
+| `os_status_changed` | `App\Listeners\RegistrarMetricasOS` | `os_id`, `status_anterior_id`, `status_novo_id`, `duracao_status_min` |
 | `os_processing_failure` | `bootstrap/app.php` (`withExceptions`) | `exception_class`, `file`, `line` |
 | `unhandled_exception` | `bootstrap/app.php` (`withExceptions`) | `exception_class`, `file`, `line` |
 
@@ -62,7 +62,7 @@ Atende ao requisito de acompanhar Diagnóstico, Execução e Finalização:
 SELECT average(numeric(duracao_status_min))
 FROM Log
 WHERE service = 'oficina-api' AND event_type = 'os_status_changed'
-FACET status_anterior
+FACET status_anterior_id
 SINCE 1 day ago
 ```
 
