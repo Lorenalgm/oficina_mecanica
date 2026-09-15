@@ -9,15 +9,15 @@ use App\Models\OSServico;
 use App\Models\OSOrcamento;
 use App\Models\Servico;
 use App\Models\Status;
-use App\Models\User;
 use App\Models\Veiculo;
 use Database\Seeders\StatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AutenticaComJwt;
 use Tests\TestCase;
 
 class OSTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AutenticaComJwt;
 
     private string $token;
     private Cliente $cliente;
@@ -29,7 +29,7 @@ class OSTest extends TestCase
     {
         parent::setUp();
         $this->seed(StatusSeeder::class);
-        $this->token = User::factory()->create()->createToken('teste')->plainTextToken;
+        $this->token = $this->jwtToken();
         $this->cliente = Cliente::factory()->create();
         $this->veiculo = Veiculo::factory()->create(['cliente_id' => $this->cliente->id]);
         $this->servico = Servico::factory()->create(['valor' => 100.00]);

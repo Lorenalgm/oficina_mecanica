@@ -5,11 +5,12 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\AutenticaComJwt;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AutenticaComJwt;
 
     private function criarAdmin(): User
     {
@@ -62,13 +63,20 @@ class AuthTest extends TestCase
         $this->postJson('/api/logout')->assertStatus(401);
     }
 
-    public function test_acesso_a_rota_protegida_com_token_valido(): void
+    public function test_acesso_a_rota_protegida_com_jwt_valido(): void
     {
-        $usuario = $this->criarAdmin();
-        $token = $usuario->createToken('teste')->plainTextToken;
+        $this->getJson('/api/clientes', $this->cabecalhoJwt())
+            ->assertStatus(200);
+    }
+
+    public function test_token_do_sanctum_nao_abre_rota_protegida_por_jwt(): void
+    {
+        // As rotas de negócio passaram a exigir o JWT emitido pela Lambda a
+        // partir do CPF; o token do Sanctum serve apenas ao painel interno.
+        $token = $this->criarAdmin()->createToken('teste')->plainTextToken;
 
         $this->getJson('/api/clientes', ['Authorization' => "Bearer {$token}"])
-            ->assertStatus(200);
+            ->assertStatus(401);
     }
 
     public function test_acesso_a_rota_protegida_sem_token_retorna_401(): void

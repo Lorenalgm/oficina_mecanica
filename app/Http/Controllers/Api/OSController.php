@@ -24,6 +24,7 @@ use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Log;
 
 class OSController extends Controller
 {
@@ -62,6 +63,14 @@ class OSController extends Controller
             descricaoProblema: $request->descricao_problema,
             servicos: $request->input('servicos', []),
         );
+
+        // Alimenta o painel "Volume diário de ordens de serviço" no New Relic.
+        Log::info('os_created', [
+            'event_type' => 'os_created',
+            'os_id' => (int) $os->getId(),
+            'cliente_id' => (int) $request->cliente_id,
+            'veiculo_id' => (int) $request->veiculo_id,
+        ]);
 
         $modelo = $this->detalharOS->executar($os->getId());
 

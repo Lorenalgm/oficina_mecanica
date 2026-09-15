@@ -46,3 +46,6 @@ k8s/secret.yaml
 
 # kubeconfig gerado pelo kind/terraform (contém certificados — sensível)
 infra/*-config
+
+# Guia de estudo pessoal (não versionar)
+GUIA-INFRA.md

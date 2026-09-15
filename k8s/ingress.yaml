@@ -1,5 +1,7 @@
-# Acesso externo via Ingress (opcional).
-# Requer um Ingress Controller no cluster (ex.: ingress-nginx).
+# Acesso externo via Ingress.
+# Requer um Ingress Controller no cluster (ex.: ingress-nginx), instalado pelo
+# Terraform em oficina-infra-k8s. No EKS, o Service do controller é um NLB e
+# esta é a URL que o API Gateway usa como backend.
 # Alternativa mais simples para a demo local:
 #   kubectl -n oficina port-forward svc/oficina-api 8080:80
 apiVersion: networking.k8s.io/v1
@@ -12,8 +14,9 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: oficina.localhost
-      http:
+    # Sem "host": a regra vale para qualquer nome, o que cobre tanto o endereço
+    # gerado pelo NLB (que só é conhecido depois do apply) quanto o acesso local.
+    - http:
         paths:
           - path: /
             pathType: Prefix

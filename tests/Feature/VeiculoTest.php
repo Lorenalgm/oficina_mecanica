@@ -3,18 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\Cliente;
-use App\Models\User;
 use App\Models\Veiculo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AutenticaComJwt;
 use Tests\TestCase;
 
 class VeiculoTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AutenticaComJwt;
 
     private function autenticado(): string
     {
-        return User::factory()->create()->createToken('teste')->plainTextToken;
+        return $this->jwtToken();
     }
 
     public function test_criar_veiculo_placa_valida(): void

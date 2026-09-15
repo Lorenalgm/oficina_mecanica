@@ -3,6 +3,7 @@
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
+use App\Logging\CorrelationProcessor;
 use Monolog\Processor\PsrLogMessageProcessor;
 
 return [
@@ -63,6 +64,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [\App\Logging\TapCorrelation::class],
         ],
 
         'daily' => [
@@ -102,7 +104,7 @@ return [
             'with' => [
                 'stream' => 'php://stderr',
             ],
-            'processors' => [PsrLogMessageProcessor::class],
+            'processors' => [PsrLogMessageProcessor::class, CorrelationProcessor::class],
         ],
 
         'syslog' => [
