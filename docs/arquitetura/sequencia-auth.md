@@ -1,74 +1,80 @@
-# Diagrama de sequência — autenticação por CPF
+# Autenticação por CPF
+
+O cliente troca o CPF por um **token (JWT)** válido por 1 hora e usa esse
+token nas demais chamadas.
+
+## 1. Login com CPF
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor C as Cliente
-    participant GW as API Gateway
-    participant L as Lambda authenticate
-    participant SM as Secrets Manager
-    participant DB as RDS PostgreSQL
+    actor C as 👤 Cliente
+    participant GW as 🚪 API Gateway
+    participant L as 🪪 Lambda authenticate
+    participant SM as 🔑 Secrets Manager
+    participant DB as 🐘 Banco (RDS)
 
-    C->>GW: POST /auth { "cpf": "529.982.247-25" }
-    GW->>L: invoca (AWS_PROXY)
+    C->>GW: POST /auth com o CPF
+    GW->>L: repassa o pedido
 
-    alt primeira invocação do container
-        L->>SM: GetSecretValue(oficina/app)
-        SM-->>L: { DB_*, JWT_SECRET }
-        Note over L: guarda em cache no módulo;<br/>invocações seguintes não repetem
+    opt primeira chamada da Lambda
+        L->>SM: busca senha do banco e chave do token
+        SM-->>L: segredos (ficam guardados para as próximas chamadas)
     end
 
-    L->>L: normaliza e valida os dígitos do CPF
+    L->>L: confere os dígitos do CPF
 
     alt CPF inválido
-        L-->>GW: 400 { "erro": "CPF inválido" }
-        GW-->>C: 400
+        rect rgb(254, 226, 226)
+            L-->>C: 400 · "CPF inválido"
+        end
     else CPF válido
-        L->>DB: SELECT id, nome FROM clientes WHERE documento = $1
-        alt cliente não encontrado
-            DB-->>L: 0 linhas
-            L-->>GW: 404 { "erro": "Cliente não encontrado" }
-            GW-->>C: 404
+        L->>DB: procura cliente com esse CPF
+        alt cliente não existe
+            rect rgb(254, 243, 199)
+                DB-->>L: nenhum resultado
+                L-->>C: 404 · "Cliente não encontrado"
+            end
         else cliente encontrado
-            DB-->>L: { id, nome }
-            L->>L: assina JWT HS256 (iss, sub, cpf, nome, iat, exp=1h)
-            L-->>GW: 200 { token, expires_in }
-            GW-->>C: 200 + token
+            rect rgb(220, 252, 231)
+                DB-->>L: id e nome do cliente
+                L->>L: gera o token (expira em 1h)
+                L-->>C: 200 · token
+            end
         end
     end
 ```
 
-## Uso do token numa rota protegida
+## 2. Chamada protegida usando o token
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor C as Cliente
-    participant GW as API Gateway
-    participant AZ as Lambda authorizer
-    participant NG as ingress-nginx (NLB)
-    participant API as oficina-api
-    participant DB as RDS PostgreSQL
+    actor C as 👤 Cliente
+    participant GW as 🚪 API Gateway
+    participant AZ as 🛡️ Lambda authorizer
+    participant API as ⚙️ oficina-api (EKS)
+    participant DB as 🐘 Banco (RDS)
 
-    C->>GW: GET /api/os  (Authorization: Bearer <jwt>)
-    GW->>AZ: Authorizer REQUEST (payload 2.0)
-    AZ->>AZ: jwtVerify HS256, issuer, exp (clockTolerance 30s)
+    C->>GW: GET /api/os com o token
+    GW->>AZ: este token é válido?
+    AZ->>AZ: confere assinatura e validade
 
     alt token inválido ou expirado
-        AZ-->>GW: { isAuthorized: false }
-        GW-->>C: 403
+        rect rgb(254, 226, 226)
+            AZ-->>GW: não
+            GW-->>C: 403 · acesso negado
+        end
     else token válido
-        AZ-->>GW: { isAuthorized: true, context: { clienteId, cpf } }
-        Note over GW: resultado fica em cache por 300s<br/>para o mesmo Authorization
-        GW->>NG: HTTP_PROXY /api/os + X-Amzn-Trace-Id
-        NG->>API: GET /api/os
-        API->>API: CorrelationId: X-Request-Id ou Root= do trace
-        API->>API: ValidarJwt revalida o mesmo token
-        API->>DB: consulta
-        DB-->>API: dados
-        API->>API: LogRequest emite JSON com duration_ms e correlation_id
-        API-->>NG: 200 + X-Request-Id
-        NG-->>GW: 200
-        GW-->>C: 200
+        rect rgb(220, 252, 231)
+            AZ-->>GW: sim (resposta guardada por 5 min)
+            GW->>API: encaminha a chamada
+            API->>API: confere o token de novo
+            API->>DB: consulta as OS
+            DB-->>API: dados
+            API-->>C: 200 · lista de OS
+        end
     end
 ```
+
+**Cores:** 🟩 sucesso · 🟨 cliente não encontrado · 🟥 erro de acesso

@@ -1,106 +1,214 @@
 # Oficina Mecânica API
 
-Back-end de gestão de uma oficina mecânica: uma **API REST** em **Laravel 11** com **arquitetura hexagonal (DDD)**, containerizada com **Docker**, orquestrada em **Kubernetes** com escalabilidade automática, provisionada por **Terraform** e entregue por uma **pipeline CI/CD**.
+API REST para gestão de uma oficina mecânica: clientes, veículos, serviços,
+peças e ordens de serviço (OS).
+
+**Tech Challenge 13SOAT — Fase 3.** A aplicação roda na AWS: autenticação por
+CPF em uma função serverless, API em Kubernetes (EKS), banco gerenciado (RDS) e
+monitoramento no New Relic.
 
 ## Sumário
 
-- [Solução e objetivos da Fase 2](#solução-e-objetivos-da-fase-2)
-- [Testar a API em produção](#testar-a-api-em-produção)
-- [Stack e justificativas](#stack-e-justificativas)
-- [Arquitetura da aplicação](#arquitetura-da-aplicação)
-- [Domínio (bounded contexts)](#domínio-bounded-contexts)
-- [Executar a aplicação localmente](#executar-a-aplicação-localmente)
-- [Infraestrutura: Kubernetes, Terraform e CI/CD](#infraestrutura-kubernetes-terraform-e-cicd)
-- [Referência da API](#referência-da-api)
+- [Links](#links)
+- [Arquitetura da Fase 3](#arquitetura-da-fase-3)
+- [Como testar](#como-testar)
+- [Autenticação por CPF](#autenticação-por-cpf)
+- [Documentação técnica](#documentação-técnica)
+- [Stack](#stack)
+- [Código: arquitetura hexagonal](#código-arquitetura-hexagonal)
+- [Rodar localmente](#rodar-localmente)
+- [CI/CD](#cicd)
+- [Rotas da API](#rotas-da-api)
 
-## Solução e objetivos da Fase 2
+## Links
 
-Na Fase 1 a oficina ganhou um sistema para gerir ordens de serviço, veículos, clientes e peças. Com o aumento da demanda e a expansão para novas unidades, a Fase 2 evolui a aplicação para **qualidade, resiliência e escalabilidade**, incorporando práticas modernas de infraestrutura e automação.
+| O quê | Link |
+|---|---|
+| 🚪 API em produção (API Gateway) | https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com |
+| 📘 Swagger | [abrir no Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml) · arquivo [`openapi.yaml`](openapi.yaml) |
+| 🔐 Repositório da autenticação | [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda) |
+| ☸️ Repositório do Kubernetes | [oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s) |
+| 🐘 Repositório do banco | [oficina-infra-db](https://github.com/Lorenalgm/oficina-infra-db) |
 
-**O que foi entregue nesta fase:**
+> O ambiente roda no **AWS Academy Learner Lab**, que desliga os recursos ao fim
+> de cada sessão. Fora das sessões de demonstração, a URL pode estar fora do ar.
 
-- **Refatoração para arquitetura hexagonal (DDD):** os casos de uso dependem apenas de interfaces de domínio (portas), sem acoplamento a `App\Models` ou à facade `DB`. Camadas separadas em `src/Domain`, `src/Application` e `src/Infrastructure`, com testes automatizados cobrindo os fluxos críticos.
-- **Evolução das APIs de OS:** abertura de OS (cliente, veículo, serviços e peças) retornando o identificador único; consulta de status; **listagem ordenada por prioridade de status** (Em Execução → Aguardando Aprovação → Diagnóstico → Recebida), mais antigas primeiro, excluindo logicamente as Finalizadas/Entregues; **aprovação/recusa de orçamento** por webhook público protegido por token de uso único; e **notificação de mudança de status por e-mail** (Resend).
-- **Containerização:** imagem de produção com Docker/FrankenPHP e `docker-compose` para desenvolvimento local.
-- **Orquestração em Kubernetes:** manifestos em [`/k8s`](k8s) (Deployment, Service, ConfigMap, Secret e HPA por CPU **e** memória).
-- **Infraestrutura como Código:** scripts Terraform em [`/infra`](infra) provisionando o cluster (kind), o metrics-server, o namespace, o Secret e o banco de dados.
-- **CI/CD (GitHub Actions):** build, testes automatizados, build e publicação da imagem, e deploy dos manifestos no cluster.
+## Arquitetura da Fase 3
 
-O detalhamento de cada ponto está nas seções a seguir.
+O sistema foi dividido em **4 repositórios**, cada um com sua pipeline:
 
-## Testar a API em produção
+| Repositório | Responsabilidade |
+|---|---|
+| **oficina_mecanica** (este) | Código da API, imagem Docker e manifestos Kubernetes |
+| [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda) | API Gateway e Lambdas de login por CPF |
+| [oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s) | Cluster EKS, Ingress e agente do New Relic |
+| [oficina-infra-db](https://github.com/Lorenalgm/oficina-infra-db) | Rede (VPC), banco RDS e Secrets Manager |
 
-A aplicação está publicada (deploy contínuo no Railway):
+Leia o caminho da requisição pelos números **(1 → 4)**:
 
-**Base URL:** `https://oficinamecanica-production-46fd.up.railway.app`
+```mermaid
+flowchart LR
+    user(["👤 Cliente"])
 
-Importe o [`openapi.yaml`](openapi.yaml) no Insomnia, Postman ou Swagger e aponte o servidor para a URL acima. Fluxo mínimo:
+    subgraph aws["☁️ AWS"]
+        direction LR
+        gw["🚪 API Gateway<br/>entrada única"]
+        auth["🪪 Lambda<br/>login por CPF"]
+        authz["🛡️ Lambda<br/>confere o token"]
 
-1. `POST /api/login` com `{ "email": "...", "password": "..." }` → retorna o token
-2. Envie o token no header `Authorization: Bearer {token}` nas demais rotas
+        subgraph eks["☸️ Kubernetes (EKS)"]
+            api["⚙️ oficina-api<br/>2 a 10 pods"]
+        end
 
-## Stack e justificativas
+        db[("🐘 PostgreSQL<br/>RDS")]
+    end
 
-**Aplicação**
-- **PHP 8.4 / Laravel 11** — framework maduro para APIs REST.
-- **PostgreSQL 16** — integridade referencial robusta e boa performance em agregações (ex.: tempo médio de execução).
-- **Laravel Sanctum** — autenticação por token, adequada a APIs.
-- **OpenAPI 3.0** — contrato da API em `openapi.yaml`, importável em qualquer cliente REST.
-- **PHPUnit + SQLite em memória** — testes isolados, sem banco externo.
+    nr["📊 New Relic<br/>painéis e alertas"]
 
-**Infraestrutura**
-- **Docker + FrankenPHP** — imagem única de produção, com servidor HTTP embutido.
-- **Kubernetes (kind)** — orquestração e escalabilidade automática (HPA); `kind` provê um cluster local, reproduzível e gratuito.
-- **Terraform** — infraestrutura como código, declarativa e reproduzível.
-- **GitHub Actions** — CI (testes + análise de qualidade) e CD (build, imagem e deploy).
-- **k6** — teste de carga como código, para demonstrar o autoscaling.
+    user ==>|"1 · CPF"| gw
+    gw ==>|"2 · gera token"| auth
+    auth --> db
+    user ==>|"3 · chamada com token"| gw
+    gw -.->|valida| authz
+    gw ==>|"4 · encaminha"| api
+    api --> db
+    api -.->|logs| nr
 
-## Arquitetura da aplicação
+    style aws fill:#f8fafc,stroke:#64748b,color:#0f172a
+    style eks fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
+    classDef entry fill:#e2e8f0,stroke:#475569,color:#0f172a;
+    classDef edge fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
+    classDef sec fill:#f5d0fe,stroke:#a21caf,color:#701a75;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d;
+    classDef obs fill:#fef08a,stroke:#a16207,color:#713f12;
+    class user entry;
+    class gw edge;
+    class auth,authz sec;
+    class api app;
+    class db data;
+    class nr obs;
+```
 
-Monolito organizado em camadas (DDD / arquitetura hexagonal): o domínio e os casos de uso não dependem do framework; a infraestrutura implementa as interfaces do domínio.
+**Legenda:** ⬜ cliente · 🟪 autenticação · 🟦 aplicação · 🟩 banco · 🟨 monitoramento
+
+Diagrama completo, com todos os componentes: [componentes.md](docs/arquitetura/componentes.md).
+
+## Como testar
+
+Pelo **Swagger** ([link](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml)):
+
+1. Em **Servers**, escolha *Produção (AWS API Gateway)*.
+2. Chame `POST /auth` com o CPF de um cliente cadastrado.
+3. Copie o `token` da resposta, clique em **Authorize** e cole.
+4. Chame as rotas protegidas, por exemplo `GET /api/os`.
+
+Ou pelo terminal:
+
+```bash
+API=https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com
+
+TOKEN=$(curl -s -X POST "$API/auth" \
+  -H 'Content-Type: application/json' \
+  -d '{"cpf":"<CPF do cliente>"}' | jq -r .token)
+
+curl "$API/api/os" -H "Authorization: Bearer $TOKEN"
+```
+
+## Autenticação por CPF
+
+O cliente se identifica **só pelo CPF**, sem senha:
+
+1. `POST /auth` chega à **Lambda `authenticate`**, que confere os dígitos do CPF,
+   busca o cliente no banco e devolve um **token JWT** válido por 1 hora.
+2. Nas rotas `/api/*`, a **Lambda `authorizer`** confere o token antes de a
+   chamada chegar ao cluster.
+3. A API confere o token de novo (middleware `ValidarJwt`), porque o cluster
+   também pode ser acessado sem passar pelo Gateway.
+
+| Resposta de `POST /auth` | Quando |
+|---|---|
+| **200** + token | CPF válido e cliente cadastrado |
+| **400** | CPF com dígitos inválidos |
+| **404** | CPF válido, mas cliente não cadastrado |
+
+Rotas **sem token**: `POST /auth`, `GET /api/consulta-publica` e a aprovação
+ou recusa de orçamento (protegidas por um token de uso único enviado ao cliente).
+
+Diagramas passo a passo: [sequencia-auth.md](docs/arquitetura/sequencia-auth.md).
+
+## Documentação técnica
+
+| Documento | Assunto |
+|---|---|
+| [Componentes](docs/arquitetura/componentes.md) | Visão geral da AWS e quem faz o quê |
+| [Autenticação](docs/arquitetura/sequencia-auth.md) | Login por CPF e uso do token |
+| [Abertura de OS](docs/arquitetura/sequencia-abertura-os.md) | Fluxo da requisição e ciclo de vida da OS |
+| [Modelo de dados](docs/arquitetura/modelo-de-dados.md) | Diagrama ER e relacionamentos |
+| [RFC-001](docs/rfcs/RFC-001-escolha-da-nuvem.md) | Escolha da nuvem |
+| [RFC-002](docs/rfcs/RFC-002-banco-de-dados.md) | Escolha do banco de dados |
+| [RFC-003](docs/rfcs/RFC-003-estrategia-de-autenticacao.md) | Estratégia de autenticação |
+| [ADR-001](docs/adrs/ADR-001-api-gateway-lambda-authorizer.md) | API Gateway com Lambda Authorizer |
+| [ADR-002](docs/adrs/ADR-002-uso-de-hpa.md) | Escalabilidade automática (HPA) |
+| [ADR-003](docs/adrs/ADR-003-observabilidade-via-logs-estruturados.md) | Monitoramento por logs estruturados |
+| [ADR-004](docs/adrs/ADR-004-labrole-no-aws-academy.md) | Permissões no AWS Academy |
+| [Consultas NRQL](docs/observabilidade/nrql.md) | Consultas dos painéis do New Relic |
+
+## Stack
+
+| Camada | Tecnologia | Por quê |
+|---|---|---|
+| Aplicação | PHP 8.4, Laravel 11 | Framework maduro para APIs REST |
+| Servidor | Docker + FrankenPHP | Uma imagem só, com servidor HTTP embutido |
+| Banco | PostgreSQL 16 (Amazon RDS) | Dados relacionais e transações ([RFC-002](docs/rfcs/RFC-002-banco-de-dados.md)) |
+| Autenticação | JWT emitido por AWS Lambda | Login por CPF, validado sem consultar o banco ([RFC-003](docs/rfcs/RFC-003-estrategia-de-autenticacao.md)) |
+| Orquestração | Kubernetes (EKS na nuvem, kind local) | Escala automática por CPU e memória |
+| Monitoramento | New Relic | Logs, painéis e alertas |
+| Testes | PHPUnit + SQLite em memória | Rápidos e sem banco externo |
+| CI/CD | GitHub Actions + SonarCloud | Testes, qualidade e deploy a cada push |
+
+## Código: arquitetura hexagonal
+
+As regras de negócio não dependem do Laravel. A camada de infraestrutura
+implementa as interfaces definidas no domínio.
 
 ```
 src/
-├── Domain/                          # Regras de negócio e contratos (sem framework)
-│   ├── Shared/ValueObjects/         # Documento (CPF/CNPJ), Placa
-│   ├── Catalogo/                    # Serviço, Insumo, repositórios
-│   ├── Identidade/                  # Cliente, Veículo, repositórios
-│   └── Atendimento/                 # OS (Aggregate Root), OSOrcamento, OSStatus
-├── Application/                     # Casos de uso (orquestração)
-│   └── {Servico,Insumo,Cliente,Veiculo,OS}/UseCases/
-└── Infrastructure/Persistence/Eloquent/
-    ├── *Mapper.php                  # Model Eloquent ↔ entidade de domínio
-    └── Eloquent*Repository.php      # Implementação dos repositórios
+├── Domain/          # Regras de negócio e interfaces (sem framework)
+│   ├── Shared/      # CPF/CNPJ e placa
+│   ├── Catalogo/    # Serviço e insumo (peça)
+│   ├── Identidade/  # Cliente e veículo
+│   └── Atendimento/ # OS, orçamento e histórico de status
+├── Application/     # Casos de uso (CriarOS, AprovarOrcamento, ...)
+└── Infrastructure/  # Banco (Eloquent) e eventos
 ```
-
-## Domínio (bounded contexts)
 
 ```mermaid
 graph TD
     subgraph CAT["🔧 Catálogo"]
-        S[Serviço\nid, nome, valor]
-        I[Insumo\nid, nome, valor,\nquantidadeEstoque]
+        S[Serviço\nnome, valor]
+        I[Insumo\nnome, valor, estoque]
     end
     subgraph ID["👤 Identidade"]
-        C[Cliente\nid, nome, Documento\ncelular, email]
-        V[Veículo\nid, Placa, marca,\nmodelo, ano]
+        C[Cliente\nnome, CPF/CNPJ,\ncelular, e-mail]
+        V[Veículo\nplaca, marca,\nmodelo, ano]
         C -- tem --> V
     end
     subgraph AT["🛠️ Atendimento"]
-        OS[OS\nAggregate Root]
-        OSS[OSServico]
-        OSSI[OSServicoInsumo]
-        OSH[OSStatus\nhistórico]
-        OSO[OSOrcamento\npendente/aprovado/recusado]
+        OS[Ordem de Serviço]
+        OSS[Serviço da OS]
+        OSSI[Peça usada]
+        OSH[Histórico de status]
+        OSO[Orçamento\npendente/aprovado/recusado]
         OS -- contém --> OSS
-        OSS -- contém --> OSSI
+        OSS -- usa --> OSSI
         OS -- registra --> OSH
         OS -- tem --> OSO
     end
     OS -- pertence a --> C
-    OS -- refere --> V
-    OSS -- refere --> S
-    OSSI -- refere --> I
+    OS -- é do --> V
+    OSS -- vem do --> S
+    OSSI -- vem do --> I
     style CAT fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
     style ID  fill:#dcfce7,stroke:#22c55e,color:#14532d
     style AT  fill:#fef9c3,stroke:#eab308,color:#713f12
@@ -111,11 +219,9 @@ graph TD
     style V   fill:#bbf7d0,stroke:#22c55e,color:#14532d
 ```
 
-> `User` existe apenas como infraestrutura de autenticação (Sanctum) — não pertence ao domínio da oficina.
+## Rodar localmente
 
-## Executar a aplicação localmente
-
-**Com Docker Compose** (aplicação + PostgreSQL):
+**Com Docker Compose** (API + PostgreSQL):
 
 ```bash
 cp .env.example .env
@@ -125,104 +231,43 @@ docker compose exec app php artisan migrate --seed
 # API em http://localhost:8000
 ```
 
-**Sem Docker:**
-
-```bash
-cp .env.example .env      # configure DB_CONNECTION=pgsql, DB_HOST=127.0.0.1
-composer install
-php artisan key:generate
-php artisan migrate --seed
-php artisan serve
-```
+Para rotas protegidas localmente, defina `JWT_SECRET` no `.env` com a mesma
+chave usada para gerar o token.
 
 **Testes:**
 
 ```bash
-php artisan test                        # suíte completa (SQLite em memória)
+php artisan test                        # suíte completa
 php artisan test --coverage --min=80    # com cobertura (requer PCOV ou Xdebug)
 ```
 
-**Notificações por e-mail (Resend).** A alteração de status de uma OS dispara um e-mail ao cliente via [`resend/resend-laravel`](https://github.com/resend/resend-laravel). Se o cliente não tiver e-mail cadastrado, a operação conclui normalmente (apenas registra em log). Configure no `.env`:
+**Em Kubernetes local (kind):** o cluster é criado pelo repositório
+[oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s) com
+`make local-up`. Depois:
 
-```dotenv
-MAIL_MAILER=resend
-MAIL_FROM_ADDRESS="onboarding@resend.dev"   # remetente de teste do Resend (sem verificar domínio)
-MAIL_FROM_NAME="Oficina Mecânica"
-RESEND_API_KEY=                             # sua chave da Resend
+```bash
+kubectl apply -k k8s/
+kubectl -n oficina rollout status deployment/oficina-api
+kubectl -n oficina port-forward svc/oficina-api 8081:80
 ```
 
-> `onboarding@resend.dev` entrega apenas para o e-mail dono da conta Resend; em produção, use um remetente de domínio verificado. Uma falha de envio nunca interrompe a troca de status (é registrada em log). Nos testes usa-se `Mail::fake()`, portanto nenhuma chave real é necessária.
+**E-mail de mudança de status (Resend):** configure `RESEND_API_KEY` no `.env`.
+Sem e-mail cadastrado ou com falha no envio, a mudança de status acontece
+normalmente e o erro vai para o log.
 
-## Infraestrutura: Kubernetes, Terraform e CI/CD
-
-A mesma aplicação é empacotada em imagem de produção, orquestrada em Kubernetes (com escalabilidade automática), provisionada por Terraform e entregue por uma pipeline CI/CD. Essa camada é **independente** do deploy no Railway.
-
-### Arquitetura proposta
-
-Componentes da aplicação e infraestrutura provisionada:
-
-Leia o **fluxo principal pelos números (1 → 2 → 3)**: a requisição entra pela borda (Service), passa pela aplicação (pods) e chega ao banco. À parte, o bloco **Autoscaling** observa o consumo e ajusta o número de pods — por isso não entra na numeração: é um mecanismo contínuo, não um passo da requisição.
+## CI/CD
 
 ```mermaid
 flowchart LR
-    user(["👤 Cliente / k6<br/>consome a API"])
-
-    subgraph cluster["☸️ Cluster Kubernetes — kind (provisionado por Terraform)"]
-        direction LR
-        svc["🌐 Service<br/>ponto de entrada"]
-        pods["⚙️ Deployment · FrankenPHP<br/>pods da aplicação (2 → 10)"]
-        db[("🐘 Postgres<br/>banco · StatefulSet + PVC")]
-        conf["🔑 ConfigMap + Secret<br/>configuração e segredos"]
-        job["🚀 Job<br/>migração + seed inicial"]
-
-        subgraph autoscale["🔁 Autoscaling — ajusta os pods conforme o uso"]
-            direction LR
-            metrics["📈 metrics-server<br/>mede CPU e memória"]
-            hpa["📊 HPA<br/>CPU 50% / Mem 70%"]
-            metrics --> hpa
-        end
-    end
-
-    user ==>|"1 · requisição HTTP"| svc
-    svc ==>|"2 · encaminha"| pods
-    pods ==>|"3 · lê e grava"| db
-    conf -.->|injeta variáveis| pods
-    job -.->|cria schema| db
-    hpa -->|escala réplicas| pods
-
-    style cluster fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
-    style autoscale fill:#fefce8,stroke:#a16207,color:#713f12
-    classDef entry fill:#e2e8f0,stroke:#475569,color:#0f172a;
-    classDef app fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d;
-    classDef cfg fill:#f5d0fe,stroke:#a21caf,color:#701a75;
-    classDef scale fill:#fef08a,stroke:#a16207,color:#713f12;
-    class user entry;
-    class svc,pods app;
-    class db data;
-    class conf,job cfg;
-    class metrics,hpa scale;
-```
-
-**Legenda:** 🟦 aplicação · 🟩 banco de dados · 🟪 configuração e segredos · 🟨 autoscaling · ⬜ cliente (externo)
-
-### Fluxo de deploy (CI/CD)
-
-A cada `push` na `main`:
-
-```mermaid
-flowchart LR
-    push(["git push<br/>na branch main"])
-    ci["ci.yml<br/>testes + SonarCloud"]
-    build["cd.yml — 1 · build + testes"]
-    image["2 · publica imagem<br/>no GHCR"]
-    kind["3 · sobe cluster<br/>kind efêmero"]
-    apply["4 · kubectl apply /k8s<br/>banco + aplicação"]
-    smoke["5 · smoke test<br/>GET /up"]
-    done(["✅ pipeline verde"])
+    push(["git push<br/>main ou develop"])
+    ci["✅ CI<br/>testes + SonarCloud"]
+    build["1 · testes"]
+    image["2 · publica a imagem<br/>no GitHub (GHCR)"]
+    deploy["3 · atualiza a API<br/>no EKS"]
+    done(["🚀 nova versão no ar"])
 
     push --> ci
-    push --> build --> image --> kind --> apply --> smoke --> done
+    push --> build --> image --> deploy --> done
 
     classDef trigger fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
     classDef ciq fill:#fae8ff,stroke:#a21caf,color:#701a75;
@@ -230,135 +275,61 @@ flowchart LR
     classDef ok fill:#dcfce7,stroke:#15803d,color:#14532d;
     class push trigger;
     class ci ciq;
-    class build,image,kind,apply,smoke step;
+    class build,image,deploy step;
     class done ok;
 ```
 
-> **Deploy no CI é efêmero:** o `cd.yml` sobe um cluster kind **dentro do runner** apenas para validar o deploy ponta a ponta, e o destrói ao final — não expõe uma URL pública. A **imagem**, porém, é publicada de verdade e fica visível na aba **Packages** do repositório (`ghcr.io/lorenalgm/oficina-api`). Para um ambiente persistente, use o kind local (abaixo) ou o Railway.
+- `main` = produção, `develop` = homologação.
+- A branch `main` é protegida: só recebe código por pull request.
+- As senhas do banco vêm do **Secrets Manager** e são entregues ao cluster no
+  deploy, sem ficar no repositório.
 
-### Pré-requisitos
+## Rotas da API
 
-Docker (em execução) e as CLIs `kind`, `kubectl`, `terraform`, `helm` e `k6`.
-No macOS: `brew install kind kubectl terraform helm k6`.
-
-### Setup inicial (uma vez só)
-
-Provisiona o cluster e implanta a aplicação. Só é preciso repetir se você destruir o cluster (`terraform destroy`).
-
-```bash
-# 1. Variáveis sensíveis (não versionadas)
-cd infra
-cp terraform.tfvars.example terraform.tfvars
-php ../artisan key:generate --show     # cole o "base64:..." em app_key; defina também db_password
-#   (sem PHP à mão? use: echo "base64:$(openssl rand -base64 32)")
-
-# 2. Provisionar a plataforma (cluster + metrics-server + namespace + secret + Postgres)
-terraform init
-terraform apply                        # confirme com "yes"
-cd ..
-
-# 3. Selecionar o cluster (o kind registra o contexto no ~/.kube/config)
-kubectl config use-context kind-oficina
-kubectl get nodes
-
-# 4. Construir a imagem de produção e carregá-la no cluster
-docker build -f docker/app/Dockerfile -t ghcr.io/lorenalgm/oficina-api:latest .
-kind load docker-image ghcr.io/lorenalgm/oficina-api:latest --name oficina
-
-# 5. Implantar a aplicação
-kubectl apply -k k8s/
-kubectl -n oficina rollout status deployment/oficina-api
-```
-
-### Cada vez que for testar (terminal novo)
-
-O cluster continua de pé entre sessões (e até depois de reiniciar a máquina, desde que o Docker suba os containers do kind). Você **não** repete o setup — só seleciona o contexto e reabre o acesso:
-
-```bash
-kubectl config use-context kind-oficina           # em CADA terminal novo (independe do diretório)
-kubectl -n oficina get pods                       # confere que a app está de pé
-kubectl -n oficina port-forward svc/oficina-api 8081:80
-# em outro terminal:  curl http://localhost:8081/up
-```
-
-O `port-forward` fica preso ao terminal: quando você fecha, o acesso cai. É só rodar de novo.
-
-> A porta local é **8081** de propósito: a 8080 do host já é usada pelo kind, então `8080` daria "address already in use".
-
-### Quando mudar o código
-
-Reconstrua a imagem, recarregue-a no cluster e reinicie os pods (não precisa de `terraform` nem recriar nada):
-
-```bash
-docker build -f docker/app/Dockerfile -t ghcr.io/lorenalgm/oficina-api:latest .
-kind load docker-image ghcr.io/lorenalgm/oficina-api:latest --name oficina
-kubectl -n oficina rollout restart deployment/oficina-api
-```
-
-### Demonstração de autoscaling (HPA + k6)
-
-Com a aplicação implantada, use **três terminais** (todos com o contexto selecionado — `kubectl config use-context kind-oficina`):
-
-```bash
-# Terminal 1 — expõe a API
-kubectl -n oficina port-forward svc/oficina-api 8081:80
-
-# Terminal 2 — acompanha o escalonamento
-kubectl -n oficina get hpa,pods -w
-#   (opcional, com visual: brew install k9s && k9s -n oficina)
-
-# Terminal 3 — gera carga, com dashboard ao vivo
-K6_WEB_DASHBOARD=true BASE_URL=http://localhost:8081 k6 run load/load-test.js
-#   dashboard em tempo real: http://localhost:5665
-```
-
-A carga simula o uso real (autentica, cria cliente e veículo e gera múltiplas ordens de serviço). Conforme a CPU ultrapassa o alvo de 50%, o HPA aumenta as réplicas de **2 até 10**; ao cessar a carga, elas retornam a 2. Mais detalhes em [`load/README.md`](load/README.md).
-
-### Limpeza
-
-```bash
-cd infra && terraform destroy      # remove o cluster kind (o Railway não é afetado)
-```
-
-## Referência da API
-
-Contrato completo em [`openapi.yaml`](openapi.yaml).
+Contrato completo no [Swagger](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml).
+🔒 = exige token.
 
 ### Autenticação
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| POST | `/api/login` | — | Autenticar e obter token Sanctum |
-| POST | `/api/logout` | ✓ | Revogar token |
 
-### Catálogo
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| GET / POST | `/api/servicos` | ✓ | Listar / criar serviço |
-| GET / PUT / DELETE | `/api/servicos/{id}` | ✓ | Buscar / atualizar / remover serviço |
-| GET / POST | `/api/insumos` | ✓ | Listar / criar insumo |
-| GET / PUT / DELETE | `/api/insumos/{id}` | ✓ | Buscar / atualizar / remover insumo |
+| Método | Rota | | Descrição |
+|---|---|:-:|---|
+| POST | `/auth` | | Login por CPF, devolve o token |
 
-### Identidade
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| GET / POST | `/api/clientes` | ✓ | Listar / criar cliente (CPF/CNPJ validado) |
-| GET / PUT / DELETE | `/api/clientes/{id}` | ✓ | Buscar / atualizar / remover cliente |
-| GET / POST | `/api/veiculos` | ✓ | Listar / criar veículo (placa validada) |
-| GET / PUT / DELETE | `/api/veiculos/{id}` | ✓ | Buscar / atualizar / remover veículo |
+### Cadastros
 
-### Atendimento (Ordens de Serviço)
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| GET | `/api/os` | ✓ | Listar OS (ordenada por prioridade — ver abaixo) |
-| POST | `/api/os` | ✓ | Criar OS |
-| GET | `/api/os/{id}` | ✓ | Detalhar OS |
-| PATCH | `/api/os/{id}/status` | ✓ | Alterar status (dispara e-mail ao cliente) |
-| POST | `/api/os/{id}/servicos` | ✓ | Adicionar serviço à OS |
-| POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | ✓ | Adicionar insumo ao serviço |
-| POST | `/api/os/{id}/orcamento` | ✓ | Gerar orçamento → *Aguardando aprovação*; retorna o `approval_token` |
-| GET | `/api/os/tempo-medio` | ✓ | Tempo médio de execução (minutos) |
+| Método | Rota | | Descrição |
+|---|---|:-:|---|
+| GET · POST | `/api/clientes` | 🔒 | Listar · criar cliente (CPF/CNPJ validado) |
+| GET · PUT · DELETE | `/api/clientes/{id}` | 🔒 | Buscar · atualizar · remover |
+| GET · POST | `/api/veiculos` | 🔒 | Listar · criar veículo (placa validada) |
+| GET · PUT · DELETE | `/api/veiculos/{id}` | 🔒 | Buscar · atualizar · remover |
+| GET · POST | `/api/servicos` | 🔒 | Listar · criar serviço |
+| GET · PUT · DELETE | `/api/servicos/{id}` | 🔒 | Buscar · atualizar · remover |
+| GET · POST | `/api/insumos` | 🔒 | Listar · criar peça |
+| GET · PUT · DELETE | `/api/insumos/{id}` | 🔒 | Buscar · atualizar · remover |
 
-**Abertura (`POST /api/os`):** exige `cliente_id`, `veiculo_id` e `descricao_problema`. Serviços e peças (insumos) são **opcionais** na abertura e podem vir aninhados — cada peça é vinculada a um serviço:
+### Ordens de serviço
+
+| Método | Rota | | Descrição |
+|---|---|:-:|---|
+| POST | `/api/os` | 🔒 | Abrir OS (serviços e peças são opcionais) |
+| GET | `/api/os` | 🔒 | Listar OS por prioridade (ver abaixo) |
+| GET | `/api/os/{id}` | 🔒 | Detalhar OS |
+| PATCH | `/api/os/{id}/status` | 🔒 | Mudar status (envia e-mail ao cliente) |
+| POST | `/api/os/{id}/servicos` | 🔒 | Adicionar serviço |
+| POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | 🔒 | Adicionar peça ao serviço |
+| POST | `/api/os/{id}/orcamento` | 🔒 | Gerar orçamento (OS vai para *Aguardando aprovação*) |
+| GET | `/api/os/tempo-medio` | 🔒 | Tempo médio de execução, em minutos |
+| POST | `/api/os/{id}/orcamento/aprovar` | token do orçamento | Aprovar: baixa o estoque e inicia a execução |
+| POST | `/api/os/{id}/orcamento/recusar` | token do orçamento | Recusar o orçamento |
+| GET | `/api/consulta-publica` | | Status da OS pelo documento + placa |
+
+**Listagem de OS:** ordem *Em execução* → *Aguardando aprovação* →
+*Em diagnóstico* → *Recebida*; dentro do mesmo status, as mais antigas primeiro.
+OS *Finalizadas* e *Entregues* não aparecem. Filtros: `cliente_id`,
+`veiculo_id`, `status_id`.
+
+**Exemplo de abertura:**
 
 ```json
 {
@@ -372,37 +343,5 @@ Contrato completo em [`openapi.yaml`](openapi.yaml).
 }
 ```
 
-Também é possível abrir a OS só com os dados obrigatórios e adicionar serviços/peças depois pelos endpoints `POST /api/os/{id}/servicos` e `.../insumos`. Retorna **201** com o identificador único da OS.
-
-**Listagem (`GET /api/os`):** ordenada por prioridade de status (*Em execução* > *Aguardando aprovação* > *Em diagnóstico* > *Recebida*); OS *Finalizada* e *Entregue* são omitidas da listagem. No mesmo status, as mais antigas vêm primeiro. Filtros `cliente_id`, `veiculo_id` e `status_id` disponíveis.
-
-### Aprovação de orçamento (notificação externa)
-
-Representam a decisão do cliente/sistema externo — são **rotas públicas**, autenticadas pelo `approval_token` gerado no orçamento.
-
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| POST | `/api/os/{id}/orcamento/aprovar` | token | Aprovar → baixa de estoque + status *Em execução* |
-| POST | `/api/os/{id}/orcamento/recusar` | token | Recusar orçamento |
-
-O `token` vai na query string ou no corpo. Sem token válido → **401**. É de **uso único** (invalidado após o uso, evitando replay). Em produção seriam adotados assinatura (HMAC), expiração e envio de e-mail em fila dedicada.
-
-### Consulta pública
-| Método | Rota | Auth | Descrição |
-|--------|------|:----:|-----------|
-| GET | `/api/consulta-publica` | — | Status da OS por documento + placa |
-
-## Infraestrutura
-
-A infraestrutura deixou de morar neste repositório na Fase 3 e foi dividida em
-três repositórios próprios, cada um com o seu ciclo de CI/CD:
-
-| Repositório | Papel |
-|---|---|
-| [`oficina-infra-db`](../oficina-infra-db) | VPC, RDS PostgreSQL e Secrets Manager |
-| [`oficina-infra-k8s`](../oficina-infra-k8s) | EKS na nuvem e kind localmente, ingress, HPA e agente do New Relic |
-| [`oficina-auth-lambda`](../oficina-auth-lambda) | API Gateway e Lambdas de autenticação por CPF |
-
-O que continua aqui: a aplicação, o `Dockerfile` e os manifestos em `k8s/`, que
-servem tanto ao kind quanto ao EKS. Para subir o cluster local, veja o alvo
-`make local-up` em `oficina-infra-k8s`.
+**Token do orçamento:** gerado junto com o orçamento, enviado na query string
+ou no corpo e válido para **um uso só**. Sem token válido, a resposta é **401**.

@@ -1,65 +1,86 @@
 # Diagrama de componentes
 
+Visão geral da Fase 3 na AWS. Leia o **caminho da requisição pelos números
+(1 → 4)**. As setas pontilhadas são apoio: segredos e monitoramento.
+
 ```mermaid
-flowchart TB
-  Cliente(["Cliente / Postman"])
+flowchart LR
+    user(["👤 Cliente<br/>Postman / navegador"])
 
-  subgraph AWS["AWS — us-east-1"]
-    GW["API Gateway HTTP API\nthrottling 50 rps / burst 100\naccess log JSON"]
+    subgraph aws["☁️ AWS — us-east-1"]
+        direction LR
+        gw["🚪 API Gateway<br/>porta única de entrada"]
 
-    subgraph Lambdas["AWS Lambda — Node.js 22"]
-      AUTH["authenticate\nPOST /auth\nvalida CPF, consulta cliente, assina JWT"]
-      AUTHZ["authorizer\nLambda Authorizer REQUEST\nverifica assinatura e exp"]
+        subgraph lambdas["🔐 Autenticação (Lambda)"]
+            direction TB
+            auth["🪪 authenticate<br/>recebe o CPF e devolve o token"]
+            authz["🛡️ authorizer<br/>confere o token a cada chamada"]
+        end
+
+        subgraph eks["☸️ Cluster Kubernetes (EKS)"]
+            direction TB
+            lb["🌐 Load Balancer + Ingress<br/>entrada do cluster"]
+            api["⚙️ oficina-api<br/>regras da oficina · 2 a 10 pods"]
+            agent["📡 Agente New Relic<br/>coleta logs e métricas"]
+        end
+
+        db[("🐘 PostgreSQL (RDS)<br/>dados da oficina")]
+        sm["🔑 Secrets Manager<br/>senha do banco e chave do token"]
     end
 
-    subgraph EKS["Amazon EKS — oficina-eks"]
-      NLB["ingress-nginx (NLB)"]
-      API["oficina-api\nLaravel 11 / FrankenPHP\nHPA 2..6 replicas"]
-      NR["nri-bundle\ninfra + logging + kube-events"]
-    end
+    nr["📊 New Relic<br/>painéis e alertas"]
 
-    RDS[("RDS PostgreSQL 16\ndb.t3.micro, subnet privada")]
-    SM["Secrets Manager\noficina/app"]
-  end
+    user ==>|"1 · login com CPF"| gw
+    gw ==> auth
+    auth -->|busca o cliente| db
+    user ==>|"2 · chamada com token"| gw
+    gw ==>|"3 · valida o token"| authz
+    gw ==>|"4 · encaminha"| lb
+    lb ==> api
+    api -->|lê e grava| db
 
-  NRC["New Relic\nDashboards, Alertas, Synthetics"]
+    auth -.-> sm
+    authz -.-> sm
+    api -.->|logs| agent
+    agent -.-> nr
 
-  Cliente -->|"POST /auth {cpf}"| GW
-  Cliente -->|"ANY /api/* + Bearer"| GW
-  GW --> AUTH
-  GW -->|autoriza| AUTHZ
-  GW -->|"HTTP_PROXY (autorizado)"| NLB
-  NLB --> API
-
-  AUTH --> RDS
-  AUTH --> SM
-  AUTHZ --> SM
-  API --> RDS
-  API -.->|"Secret do k8s"| SM
-
-  API -->|"stdout JSON"| NR
-  NR --> NRC
-  GW -.->|Synthetics ping /up| NRC
+    style aws fill:#f8fafc,stroke:#64748b,color:#0f172a
+    style lambdas fill:#fdf4ff,stroke:#a21caf,color:#701a75
+    style eks fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
+    classDef entry fill:#e2e8f0,stroke:#475569,color:#0f172a;
+    classDef edge fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
+    classDef sec fill:#f5d0fe,stroke:#a21caf,color:#701a75;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d;
+    classDef obs fill:#fef08a,stroke:#a16207,color:#713f12;
+    class user entry;
+    class gw edge;
+    class auth,authz,sm sec;
+    class lb,api app;
+    class db data;
+    class agent,nr obs;
 ```
 
-## Responsabilidades
+**Legenda:** ⬜ cliente · 🟦 aplicação · 🟪 autenticação e segredos · 🟩 banco · 🟨 monitoramento
 
-| Componente | Responsabilidade | Repositório |
+## Quem faz o quê
+
+| Componente | Função | Repositório |
 |---|---|---|
-| API Gateway | Porta única de entrada, throttling, log de acesso, delega autorização | `oficina-auth-lambda` |
-| `authenticate` | Valida os dígitos do CPF, verifica se o cliente existe e emite o JWT HS256 | `oficina-auth-lambda` |
-| `authorizer` | Valida o JWT em cada chamada a `/api/*` antes de o Gateway encaminhar | `oficina-auth-lambda` |
-| `oficina-api` | Regras de negócio da oficina; revalida o JWT por conta própria | `oficina-api` |
-| RDS PostgreSQL | Estado do domínio | `oficina-infra-db` |
-| Secrets Manager | Credenciais do banco e segredo HS256 compartilhado | `oficina-infra-db` |
-| EKS + ingress | Execução e escalabilidade da aplicação | `oficina-infra-k8s` |
-| nri-bundle | Coleta logs, métricas de pod e eventos do cluster | `oficina-infra-k8s` |
+| API Gateway | Entrada única; limita a taxa de chamadas | `oficina-auth-lambda` |
+| Lambda `authenticate` | Valida o CPF, busca o cliente e gera o token (JWT) | `oficina-auth-lambda` |
+| Lambda `authorizer` | Bloqueia chamadas sem token válido antes de chegarem ao cluster | `oficina-auth-lambda` |
+| `oficina-api` | Regras da oficina; confere o token de novo | `oficina-api` |
+| EKS + Ingress | Roda a API e ajusta o número de pods | `oficina-infra-k8s` |
+| Agente New Relic | Envia logs e métricas para os painéis | `oficina-infra-k8s` |
+| RDS PostgreSQL | Guarda os dados | `oficina-infra-db` |
+| Secrets Manager | Guarda a senha do banco e a chave do token | `oficina-infra-db` |
 
-## O JWT é validado duas vezes, de propósito
+## Por que o token é conferido duas vezes
 
-O Authorizer do Gateway rejeita o tráfego não autenticado na borda, antes de
-consumir capacidade do cluster. O middleware `ValidarJwt` na aplicação repete a
-verificação porque (a) o cluster é alcançável por dentro da VPC sem passar pelo
-Gateway e (b) permite rodar a API inteira no kind, sem AWS, durante o
-desenvolvimento. É defesa em profundidade, não redundância acidental —
-detalhado no [ADR-001](../adrs/ADR-001-api-gateway-lambda-authorizer.md).
+1. **No Gateway**, para barrar chamadas inválidas antes de gastar recursos do
+   cluster.
+2. **Na API**, porque o cluster também pode ser acessado sem passar pelo
+   Gateway (por dentro da rede ou rodando local no kind).
+
+Detalhes no [ADR-001](../adrs/ADR-001-api-gateway-lambda-authorizer.md).

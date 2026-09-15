@@ -1,12 +1,16 @@
 openapi: 3.0.0
 info:
   title: Oficina Mecânica API
-  version: 1.0.0
-  description: API de gestão de oficina mecânica
+  version: 3.0.0
+  description: |
+    API de gestão de oficina mecânica.
+
+    **Como autenticar:** chame `POST /auth` com o CPF de um cliente cadastrado,
+    copie o `token` da resposta e use em **Authorize**.
 
 servers:
-  - url: https://oficinamecanica-production-46fd.up.railway.app
-    description: Produção (Railway)
+  - url: https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com
+    description: Produção (AWS API Gateway)
   - url: http://localhost:8000
     description: Local
 
@@ -21,9 +25,15 @@ tags:
 
 components:
   securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token devolvido por POST /auth (válido por 1 hora)
     sanctum:
       type: http
       scheme: bearer
+      description: Token do login antigo (Fase 2), usado só em /api/logout
 
   schemas:
     Servico:
@@ -147,10 +157,40 @@ components:
 
 paths:
   # ── Autenticação ──────────────────────────────────────────────
+  /auth:
+    post:
+      tags: [Autenticação]
+      summary: Login por CPF (Lambda) — devolve o token JWT
+      description: Atendida pela Lambda `authenticate` no API Gateway, não pela aplicação Laravel.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cpf]
+              properties:
+                cpf: { type: string, example: '529.982.247-25' }
+      responses:
+        200:
+          description: Token gerado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_in: { type: integer, example: 3600 }
+        400:
+          description: CPF inválido
+        404:
+          description: Cliente não encontrado
+
   /api/login:
     post:
       tags: [Autenticação]
-      summary: Autenticar e obter token
+      summary: Login antigo por e-mail e senha (Fase 2)
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -192,7 +232,7 @@ paths:
     post:
       tags: [Clientes]
       summary: Criar cliente
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -219,7 +259,7 @@ paths:
     get:
       tags: [Clientes]
       summary: Listar clientes
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Lista de clientes
@@ -241,7 +281,7 @@ paths:
     get:
       tags: [Clientes]
       summary: Buscar cliente
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Cliente encontrado
@@ -256,7 +296,7 @@ paths:
     put:
       tags: [Clientes]
       summary: Atualizar cliente
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         content:
           application/json:
@@ -278,7 +318,7 @@ paths:
     delete:
       tags: [Clientes]
       summary: Remover cliente
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         204:
           description: Removido
@@ -288,7 +328,7 @@ paths:
     post:
       tags: [Veículos]
       summary: Criar veículo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -316,7 +356,7 @@ paths:
     get:
       tags: [Veículos]
       summary: Listar veículos
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Lista de veículos
@@ -338,7 +378,7 @@ paths:
     get:
       tags: [Veículos]
       summary: Buscar veículo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Veículo encontrado
@@ -353,7 +393,7 @@ paths:
     put:
       tags: [Veículos]
       summary: Atualizar veículo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         content:
           application/json:
@@ -375,7 +415,7 @@ paths:
     delete:
       tags: [Veículos]
       summary: Remover veículo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         204:
           description: Removido
@@ -385,7 +425,7 @@ paths:
     post:
       tags: [Serviços]
       summary: Criar serviço
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -408,7 +448,7 @@ paths:
     get:
       tags: [Serviços]
       summary: Listar serviços
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Lista de serviços
@@ -430,7 +470,7 @@ paths:
     get:
       tags: [Serviços]
       summary: Buscar serviço
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Serviço encontrado
@@ -445,7 +485,7 @@ paths:
     put:
       tags: [Serviços]
       summary: Atualizar serviço
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         content:
           application/json:
@@ -466,7 +506,7 @@ paths:
     delete:
       tags: [Serviços]
       summary: Remover serviço
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         204:
           description: Removido
@@ -476,7 +516,7 @@ paths:
     post:
       tags: [Insumos]
       summary: Criar insumo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -500,7 +540,7 @@ paths:
     get:
       tags: [Insumos]
       summary: Listar insumos
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Lista de insumos
@@ -522,7 +562,7 @@ paths:
     get:
       tags: [Insumos]
       summary: Buscar insumo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Insumo encontrado
@@ -537,7 +577,7 @@ paths:
     put:
       tags: [Insumos]
       summary: Atualizar insumo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         content:
           application/json:
@@ -559,7 +599,7 @@ paths:
     delete:
       tags: [Insumos]
       summary: Remover insumo
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         204:
           description: Removido
@@ -570,7 +610,7 @@ paths:
       tags: [Ordens de Serviço]
       summary: Criar OS
       description: O status inicial é definido automaticamente como Recebida.
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -618,7 +658,7 @@ paths:
         (Em execução > Aguardando aprovação > Em diagnóstico > Recebida) e,
         dentro de um mesmo status, da mais antiga para a mais recente (created_at ascendente).
         Filtros disponíveis por cliente_id, status_id e veiculo_id.
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       parameters:
         - name: cliente_id
           in: query
@@ -651,7 +691,7 @@ paths:
       tags: [Ordens de Serviço]
       summary: Detalhar OS
       description: Retorna a OS completa com serviços, insumos, histórico de status e orçamento.
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: OS detalhada
@@ -673,7 +713,7 @@ paths:
     patch:
       tags: [Ordens de Serviço]
       summary: Alterar status
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -706,7 +746,7 @@ paths:
     post:
       tags: [Ordens de Serviço]
       summary: Adicionar serviço à OS
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -746,7 +786,7 @@ paths:
     post:
       tags: [Ordens de Serviço]
       summary: Adicionar insumo ao serviço
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       requestBody:
         required: true
         content:
@@ -788,7 +828,7 @@ paths:
         Calcula o valor total com base nos serviços e insumos e muda o status para Aguardando aprovação.
         Gera um approval_token (uso único) retornado apenas nesta resposta — ele autentica a
         aprovação/recusa externa do orçamento nas rotas públicas correspondentes.
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         201:
           description: Orçamento gerado
@@ -911,7 +951,7 @@ paths:
       tags: [Ordens de Serviço]
       summary: Tempo médio de execução
       description: Tempo médio em minutos entre os status Em execução e Finalizada.
-      security: [{ sanctum: [] }]
+      security: [{ jwt: [] }]
       responses:
         200:
           description: Tempo médio calculado
