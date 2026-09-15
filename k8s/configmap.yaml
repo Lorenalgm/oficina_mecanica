@@ -6,6 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/name: oficina-api
 data:
+  # Vira o atributo extra.service de todo log (App\Logging\CorrelationProcessor
+  # usa config('app.name')). Sem isto os logs chegam ao New Relic como "Laravel".
+  APP_NAME: "oficina-api"
   APP_ENV: "production"
   APP_DEBUG: "false"
   APP_URL: "http://localhost:8080"
