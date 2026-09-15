@@ -101,7 +101,7 @@ class OSController extends Controller
                 'servico_id' => $osServico->getServicoId(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -120,7 +120,7 @@ class OSController extends Controller
                 'quantidade' => $item->getQuantidade(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -138,7 +138,7 @@ class OSController extends Controller
                 'approval_token' => $orcamento->getApprovalToken(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -155,9 +155,9 @@ class OSController extends Controller
         } catch (TokenAprovacaoInvalido $e) {
             return response()->json(['message' => $e->getMessage()], 401);
         } catch (EstoqueInsuficienteException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -173,8 +173,25 @@ class OSController extends Controller
         } catch (TokenAprovacaoInvalido $e) {
             return response()->json(['message' => $e->getMessage()], 401);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
+    }
+
+    /**
+     * Regra de negócio que impediu a OS de avançar (serviço inexistente,
+     * estoque insuficiente, orçamento sem serviços...). A resposta segue 422,
+     * mas o evento vai para o log: é ele que alimenta o alerta
+     * "Falha no processamento de OS" no New Relic.
+     */
+    private function falhaNoProcessamento(\RuntimeException $e, int $osId): JsonResponse
+    {
+        Log::error($e->getMessage(), [
+            'event_type' => 'os_processing_failure',
+            'os_id' => $osId,
+            'exception_class' => $e::class,
+        ]);
+
+        return response()->json(['message' => $e->getMessage()], 422);
     }
 
     private function extrairToken(Request $request): ?string
@@ -196,7 +213,7 @@ class OSController extends Controller
 
             return (new OSResource($os))->response();
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 

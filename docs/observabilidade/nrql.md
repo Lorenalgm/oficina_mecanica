@@ -38,7 +38,7 @@ e o cluster é `clusterName = 'oficina-eks'`.
 | `http_request` | `App\Http\Middleware\LogRequest` | `method`, `route`, `path`, `status`, `duration_ms`, `cliente_id`, `ip` |
 | `os_created` | `OSController::store` | `os_id`, `cliente_id`, `veiculo_id` |
 | `os_status_changed` | `App\Listeners\RegistrarMetricasOS` | `os_id`, `status_anterior_id`, `status_novo_id`, `duracao_status_min` |
-| `os_processing_failure` | `bootstrap/app.php` (`withExceptions`) | `exception_class`, `file`, `line` |
+| `os_processing_failure` | `OSController` (regra que impede a OS de avançar, responde 422) e `bootstrap/app.php` (exceção não tratada do domínio Atendimento) | `os_id`, `exception_class` |
 | `unhandled_exception` | `bootstrap/app.php` (`withExceptions`) | `exception_class`, `file`, `line` |
 
 Todos carregam, via `CorrelationProcessor`: `correlation_id`, `service`, `env`,
@@ -232,10 +232,10 @@ Com a aplicação rodando (kind ou EKS):
 # 2. Gerar tráfego para os painéis de latência
 k6 run load/script.js
 
-# 3. Forçar um os_processing_failure e conferir o alerta A disparando
-curl -i -X PATCH "$API/api/os/999999/status" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"status_id": 99}'
+# 3. Forçar um os_processing_failure (orçamento de OS inexistente → 422)
+#    e conferir o alerta A disparando
+curl -i -X POST "$API/api/os/999999/orcamento" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 4. Rastrear uma requisição ponta a ponta
 curl -i "$API/api/os" -H "Authorization: Bearer $TOKEN" | grep -i x-request-id
