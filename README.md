@@ -241,7 +241,9 @@ flowchart LR
 Docker (em execução) e as CLIs `kind`, `kubectl`, `terraform`, `helm` e `k6`.
 No macOS: `brew install kind kubectl terraform helm k6`.
 
-### Passo a passo (do zero)
+### Setup inicial (uma vez só)
+
+Provisiona o cluster e implanta a aplicação. Só é preciso repetir se você destruir o cluster (`terraform destroy`).
 
 ```bash
 # 1. Variáveis sensíveis (não versionadas)
@@ -255,8 +257,8 @@ terraform init
 terraform apply                        # confirme com "yes"
 cd ..
 
-# 3. Selecionar o cluster (kubeconfig gerado pelo Terraform)
-export KUBECONFIG="$(pwd)/infra/oficina-config"
+# 3. Selecionar o cluster (o kind registra o contexto no ~/.kube/config)
+kubectl config use-context kind-oficina
 kubectl get nodes
 
 # 4. Construir a imagem de produção e carregá-la no cluster
@@ -266,28 +268,47 @@ kind load docker-image ghcr.io/lorenalgm/oficina-api:latest --name oficina
 # 5. Implantar a aplicação
 kubectl apply -k k8s/
 kubectl -n oficina rollout status deployment/oficina-api
-
-# 6. Acessar a API
-kubectl -n oficina port-forward svc/oficina-api 8080:80
-# em outro terminal:  curl http://localhost:8080/up
 ```
 
-> Exporte `KUBECONFIG="$(pwd)/infra/oficina-config"` (a partir da raiz do projeto) em cada novo terminal.
+### Cada vez que for testar (terminal novo)
+
+O cluster continua de pé entre sessões (e até depois de reiniciar a máquina, desde que o Docker suba os containers do kind). Você **não** repete o setup — só seleciona o contexto e reabre o acesso:
+
+```bash
+kubectl config use-context kind-oficina           # em CADA terminal novo (independe do diretório)
+kubectl -n oficina get pods                       # confere que a app está de pé
+kubectl -n oficina port-forward svc/oficina-api 8081:80
+# em outro terminal:  curl http://localhost:8081/up
+```
+
+O `port-forward` fica preso ao terminal: quando você fecha, o acesso cai. É só rodar de novo.
+
+> A porta local é **8081** de propósito: a 8080 do host já é usada pelo kind, então `8080` daria "address already in use".
+
+### Quando mudar o código
+
+Reconstrua a imagem, recarregue-a no cluster e reinicie os pods (não precisa de `terraform` nem recriar nada):
+
+```bash
+docker build -f docker/app/Dockerfile -t ghcr.io/lorenalgm/oficina-api:latest .
+kind load docker-image ghcr.io/lorenalgm/oficina-api:latest --name oficina
+kubectl -n oficina rollout restart deployment/oficina-api
+```
 
 ### Demonstração de autoscaling (HPA + k6)
 
-Com a aplicação implantada, use **três terminais** (todos com o `KUBECONFIG` exportado):
+Com a aplicação implantada, use **três terminais** (todos com o contexto selecionado — `kubectl config use-context kind-oficina`):
 
 ```bash
 # Terminal 1 — expõe a API
-kubectl -n oficina port-forward svc/oficina-api 8080:80
+kubectl -n oficina port-forward svc/oficina-api 8081:80
 
 # Terminal 2 — acompanha o escalonamento
 kubectl -n oficina get hpa,pods -w
 #   (opcional, com visual: brew install k9s && k9s -n oficina)
 
 # Terminal 3 — gera carga, com dashboard ao vivo
-K6_WEB_DASHBOARD=true BASE_URL=http://localhost:8080 k6 run load/load-test.js
+K6_WEB_DASHBOARD=true BASE_URL=http://localhost:8081 k6 run load/load-test.js
 #   dashboard em tempo real: http://localhost:5665
 ```
 
@@ -370,3 +391,18 @@ O `token` vai na query string ou no corpo. Sem token válido → **401**. É de 
 | Método | Rota | Auth | Descrição |
 |--------|------|:----:|-----------|
 | GET | `/api/consulta-publica` | — | Status da OS por documento + placa |
+
+## Infraestrutura
+
+A infraestrutura deixou de morar neste repositório na Fase 3 e foi dividida em
+três repositórios próprios, cada um com o seu ciclo de CI/CD:
+
+| Repositório | Papel |
+|---|---|
+| [`oficina-infra-db`](../oficina-infra-db) | VPC, RDS PostgreSQL e Secrets Manager |
+| [`oficina-infra-k8s`](../oficina-infra-k8s) | EKS na nuvem e kind localmente, ingress, HPA e agente do New Relic |
+| [`oficina-auth-lambda`](../oficina-auth-lambda) | API Gateway e Lambdas de autenticação por CPF |
+
+O que continua aqui: a aplicação, o `Dockerfile` e os manifestos em `k8s/`, que
+servem tanto ao kind quanto ao EKS. Para subir o cluster local, veja o alvo
+`make local-up` em `oficina-infra-k8s`.
