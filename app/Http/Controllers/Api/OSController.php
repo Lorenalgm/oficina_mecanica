@@ -20,7 +20,6 @@ use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
 use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Atendimento\Filters\FiltroListagemOS;
-use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -101,7 +100,7 @@ class OSController extends Controller
                 'servico_id' => $osServico->getServicoId(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -120,7 +119,7 @@ class OSController extends Controller
                 'quantidade' => $item->getQuantidade(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -138,7 +137,7 @@ class OSController extends Controller
                 'approval_token' => $orcamento->getApprovalToken(),
             ]], 201);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -154,10 +153,8 @@ class OSController extends Controller
             ]]);
         } catch (TokenAprovacaoInvalido $e) {
             return response()->json(['message' => $e->getMessage()], 401);
-        } catch (EstoqueInsuficienteException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 
@@ -173,8 +170,19 @@ class OSController extends Controller
         } catch (TokenAprovacaoInvalido $e) {
             return response()->json(['message' => $e->getMessage()], 401);
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
+    }
+
+    private function falhaNoProcessamento(\RuntimeException $e, int $osId): JsonResponse
+    {
+        Log::error($e->getMessage(), [
+            'event_type' => 'os_processing_failure',
+            'os_id' => $osId,
+            'exception_class' => $e::class,
+        ]);
+
+        return response()->json(['message' => $e->getMessage()], 422);
     }
 
     private function extrairToken(Request $request): ?string
@@ -196,7 +204,7 @@ class OSController extends Controller
 
             return (new OSResource($os))->response();
         } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->falhaNoProcessamento($e, $id);
         }
     }
 

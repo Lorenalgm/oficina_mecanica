@@ -66,4 +66,17 @@ class ObservabilidadeTest extends TestCase
             fn (string $nivel, string $mensagem, array $contexto) => $contexto['status'] === 404
         );
     }
+
+    public function test_falha_no_processamento_da_os_gera_evento_para_o_alerta(): void
+    {
+        Log::spy();
+
+        $this->postJson('/api/os/999999/orcamento', [], $this->cabecalhoJwt())
+            ->assertStatus(422);
+
+        Log::shouldHaveReceived('error')->once()->withArgs(
+            fn (string $mensagem, array $contexto) => $contexto['event_type'] === 'os_processing_failure'
+                && $contexto['os_id'] === 999999
+        );
+    }
 }
