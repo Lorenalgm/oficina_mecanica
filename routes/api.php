@@ -9,9 +9,14 @@ Route::get('/consulta-publica', [\App\Http\Controllers\Api\OSController::class, 
 Route::post('/os/{id}/orcamento/aprovar', [\App\Http\Controllers\Api\OSController::class, 'aprovarOrcamento']);
 Route::post('/os/{id}/orcamento/recusar', [\App\Http\Controllers\Api\OSController::class, 'recusarOrcamento']);
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
+// Logout encerra um token do Sanctum (painel interno), não o JWT emitido pela
+// Lambda — por isso continua no guard do Sanctum.
+Route::middleware('auth:sanctum')->post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
 
+// Rotas sensíveis: protegidas pelo JWT emitido a partir do CPF do cliente.
+// O API Gateway já valida o token no Lambda Authorizer; revalidamos aqui como
+// defesa em profundidade e para manter a API protegida fora do Gateway.
+Route::middleware('jwt')->group(function () {
     Route::apiResource('/clientes', \App\Http\Controllers\Api\ClienteController::class);
     Route::apiResource('/veiculos', \App\Http\Controllers\Api\VeiculoController::class);
     Route::apiResource('/servicos', \App\Http\Controllers\Api\ServicoController::class);

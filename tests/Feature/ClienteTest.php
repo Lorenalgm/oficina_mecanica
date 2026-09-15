@@ -3,17 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\Cliente;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AutenticaComJwt;
 use Tests\TestCase;
 
 class ClienteTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AutenticaComJwt;
 
     private function autenticado(): string
     {
-        return User::factory()->create()->createToken('teste')->plainTextToken;
+        return $this->jwtToken();
     }
 
     public function test_criar_cliente_com_cpf_valido(): void

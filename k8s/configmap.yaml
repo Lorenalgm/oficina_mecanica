@@ -10,6 +10,10 @@ data:
   APP_DEBUG: "false"
   APP_URL: "http://localhost:8080"
   LOG_CHANNEL: "stderr"
+  # Logs em JSON: o newrelic-logging (nri-bundle) coleta o stdout/stderr dos pods
+  # e cada campo do registro vira um atributo consultável por NRQL no New Relic.
+  LOG_STDERR_FORMATTER: "Monolog\\Formatter\\JsonFormatter"
+  LOG_LEVEL: "info"
 
   DB_CONNECTION: "pgsql"
   DB_HOST: "postgres"

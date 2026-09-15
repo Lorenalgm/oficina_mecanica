@@ -3,18 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\Insumo;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AutenticaComJwt;
 use Tests\TestCase;
 
 class InsumoTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AutenticaComJwt;
 
     private function autenticado(): string
     {
-        $usuario = User::factory()->create();
-        return $usuario->createToken('teste')->plainTextToken;
+        return $this->jwtToken();
     }
 
     public function test_listar_insumos(): void
