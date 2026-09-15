@@ -20,7 +20,6 @@ use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
 use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Atendimento\Filters\FiltroListagemOS;
-use Domain\Catalogo\Exceptions\EstoqueInsuficienteException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -154,8 +153,6 @@ class OSController extends Controller
             ]]);
         } catch (TokenAprovacaoInvalido $e) {
             return response()->json(['message' => $e->getMessage()], 401);
-        } catch (EstoqueInsuficienteException $e) {
-            return $this->falhaNoProcessamento($e, $id);
         } catch (\RuntimeException $e) {
             return $this->falhaNoProcessamento($e, $id);
         }
@@ -177,12 +174,6 @@ class OSController extends Controller
         }
     }
 
-    /**
-     * Regra de negócio que impediu a OS de avançar (serviço inexistente,
-     * estoque insuficiente, orçamento sem serviços...). A resposta segue 422,
-     * mas o evento vai para o log: é ele que alimenta o alerta
-     * "Falha no processamento de OS" no New Relic.
-     */
     private function falhaNoProcessamento(\RuntimeException $e, int $osId): JsonResponse
     {
         Log::error($e->getMessage(), [
