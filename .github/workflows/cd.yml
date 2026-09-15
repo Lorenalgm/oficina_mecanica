@@ -128,9 +128,12 @@ jobs:
       - name: Aplicar manifestos com a imagem do commit
         run: |
           cd k8s
+          # O Job de migração fica de fora: Jobs são imutáveis (reaplicar com
+          # imagem nova falha) e ele só pode rodar depois do patch do ConfigMap
+          # abaixo. O passo "Migrações" recria o Job.
           kubectl kustomize . \
             | sed "s#${IMAGE_NAME}:latest#${IMAGE_NAME}:${GITHUB_SHA}#g" \
-            | kubectl apply -f -
+            | kubectl apply -f - --selector='app.kubernetes.io/component!=migrate'
 
           # O ConfigMap versionado aponta para o Postgres do kind; na nuvem o
           # banco é o RDS, cujo endereço só é conhecido em tempo de deploy.
