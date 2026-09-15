@@ -10,7 +10,9 @@ class Cliente extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['nome', 'documento', 'celular', 'email'];
+    protected $fillable = ['nome', 'documento', 'celular', 'email', 'ativo'];
+
+    protected $casts = ['ativo' => 'boolean'];
 
     public function veiculos(): HasMany
     {
