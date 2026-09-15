@@ -2,13 +2,26 @@ name: CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+  # O caminho antigo (kind efêmero dentro do runner) continua disponível sob
+  # demanda: serve de smoke test completo sem depender de credenciais da AWS,
+  # que no AWS Academy Learner Lab expiram a cada sessão.
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: 'Onde implantar'
+        required: true
+        default: eks
+        type: choice
+        options: [eks, kind]
 
-# Pipeline de entrega: build -> testes -> imagem (GHCR) -> deploy em kind efêmero
-# -> smoke test. Independente do ci.yml (testes + SonarCloud) e do deploy no Railway.
+# Pipeline de entrega: testes -> imagem (GHCR) -> deploy -> smoke test.
+# Independente do ci.yml (testes + SonarCloud).
 
 env:
   IMAGE_NAME: ghcr.io/lorenalgm/oficina-api
+
+concurrency: deploy-${{ github.ref_name }}
 
 jobs:
   tests:
@@ -37,8 +50,8 @@ jobs:
       - name: Run tests
         run: php artisan test
 
-  deploy:
-    name: Imagem & Deploy (kind efêmero)
+  imagem:
+    name: Imagem de produção (GHCR)
     runs-on: ubuntu-latest
     needs: tests
     permissions:
@@ -54,7 +67,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build e push da imagem de produção
+      - name: Build e push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,13 +77,112 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.IMAGE_NAME }}:latest
 
+  deploy-eks:
+    name: Deploy no EKS
+    runs-on: ubuntu-latest
+    needs: imagem
+    if: github.event_name == 'push' || inputs.alvo == 'eks'
+    environment: ${{ github.ref_name == 'main' && 'producao' || 'homologacao' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Credenciais do AWS Academy Learner Lab são temporárias e exigem o
+          # token de sessão. Atualize os três secrets a cada sessão.
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Kubeconfig do cluster
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ vars.AWS_REGION || 'us-east-1' }}" \
+            --name "${{ vars.EKS_CLUSTER_NAME || 'oficina-eks' }}"
+
+      - name: Namespace e Secret a partir do Secrets Manager
+        env:
+          SECRET_ID: ${{ vars.APP_SECRET_ID || 'oficina/app' }}
+        run: |
+          kubectl get namespace oficina >/dev/null 2>&1 || kubectl create namespace oficina
+
+          # As credenciais do RDS e o JWT_SECRET vivem no Secrets Manager, criado
+          # por oficina-infra-db. Nada sensível trafega por variável do workflow.
+          json=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" \
+            --query SecretString --output text)
+
+          leia() { echo "$json" | jq -r ".$1"; }
+
+          kubectl -n oficina create secret generic oficina-api-secrets \
+            --from-literal=APP_KEY="${{ secrets.APP_KEY }}" \
+            --from-literal=DB_PASSWORD="$(leia DB_PASSWORD)" \
+            --from-literal=JWT_SECRET="$(leia JWT_SECRET)" \
+            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "DB_HOST=$(leia DB_HOST)" >> "$GITHUB_ENV"
+          echo "DB_DATABASE=$(leia DB_DATABASE)" >> "$GITHUB_ENV"
+          echo "DB_USERNAME=$(leia DB_USERNAME)" >> "$GITHUB_ENV"
+
+      - name: Aplicar manifestos com a imagem do commit
+        run: |
+          cd k8s
+          kubectl kustomize . \
+            | sed "s#${IMAGE_NAME}:latest#${IMAGE_NAME}:${GITHUB_SHA}#g" \
+            | kubectl apply -f -
+
+          # O ConfigMap versionado aponta para o Postgres do kind; na nuvem o
+          # banco é o RDS, cujo endereço só é conhecido em tempo de deploy.
+          kubectl -n oficina patch configmap oficina-api-config --type merge -p "$(jq -n \
+            --arg host "$DB_HOST" --arg db "$DB_DATABASE" --arg user "$DB_USERNAME" \
+            '{data: {DB_HOST: $host, DB_PORT: "5432", DB_DATABASE: $db, DB_USERNAME: $user}}')"
+
+          kubectl apply -f ingress.yaml
+
+      - name: Migrações
+        run: |
+          # Jobs são imutáveis: recria para que rode com a imagem nova.
+          kubectl -n oficina delete job oficina-api-migrate --ignore-not-found
+          kubectl kustomize k8s/ \
+            | sed "s#${IMAGE_NAME}:latest#${IMAGE_NAME}:${GITHUB_SHA}#g" \
+            | kubectl apply -f - --selector=app.kubernetes.io/component=migrate
+          kubectl -n oficina wait --for=condition=complete job/oficina-api-migrate --timeout=300s
+
+      - name: Rollout
+        run: |
+          kubectl -n oficina rollout restart deployment/oficina-api
+          kubectl -n oficina rollout status deployment/oficina-api --timeout=300s
+
+      - name: Smoke test (GET /up)
+        run: |
+          kubectl -n oficina run smoke --image=curlimages/curl:8.10.1 \
+            --restart=Never --rm -i --quiet --command -- \
+            curl -fsS http://oficina-api/up
+
+      - name: URL pública do ingress
+        run: |
+          # Alimenta a variável backend_base_url do repositório oficina-auth-lambda.
+          kubectl -n ingress-nginx get svc ingress-nginx-controller \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'; echo
+
+  deploy-kind:
+    name: Deploy em kind efêmero
+    runs-on: ubuntu-latest
+    needs: imagem
+    if: github.event_name == 'workflow_dispatch' && inputs.alvo == 'kind'
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Criar cluster kind efêmero
         uses: helm/kind-action@v1
         with:
           cluster_name: oficina
 
       - name: Carregar a imagem no kind
-        run: kind load docker-image "${IMAGE_NAME}:${GITHUB_SHA}" --name oficina
+        run: |
+          docker pull "${IMAGE_NAME}:${GITHUB_SHA}"
+          kind load docker-image "${IMAGE_NAME}:${GITHUB_SHA}" --name oficina
 
       - name: Instalar metrics-server
         run: |
@@ -84,6 +196,7 @@ jobs:
           kubectl -n oficina create secret generic oficina-api-secrets \
             --from-literal=APP_KEY="base64:$(openssl rand -base64 32)" \
             --from-literal=DB_PASSWORD="ci-postgres-pass" \
+            --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
             --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}"
           kubectl apply -f k8s/postgres.yaml
           kubectl -n oficina rollout status statefulset/postgres --timeout=180s
