@@ -39,7 +39,7 @@ pede ACID.
 
 Três características do modelo reforçam a escolha:
 
-1. **Integridade referencial declarada no banco.** As oito tabelas de negócio se
+1. **Integridade referencial declarada no banco.** As dez tabelas de negócio se
    ligam por chave estrangeira, com `ON DELETE CASCADE` onde há composição real
    (`os_servicos`, `os_status` e `os_orcamentos` não existem sem a `os`) e
    restrição onde não há (não se apaga um serviço do catálogo em uso). Fora de
@@ -75,5 +75,5 @@ do cluster. Backup diário automático.
 - *Instância única, sem Multi-AZ.* Aceito: é ambiente acadêmico, e Multi-AZ
   dobraria o custo. Em produção real, `multi_az = true`.
 
-O modelo ER completo e a justificativa estendida estão no README de
-[`oficina-infra-db`](../../../oficina-infra-db/README.md).
+O diagrama ER, com a explicação de cada relacionamento, está em
+[`docs/arquitetura/modelo-de-dados.md`](../arquitetura/modelo-de-dados.md).
