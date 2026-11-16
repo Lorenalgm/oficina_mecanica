@@ -24,5 +24,12 @@ return [
 
     'heartbeat_arquivo' => env('MENSAGERIA_HEARTBEAT', storage_path('framework/mensageria.heartbeat')),
 
-    'handlers' => [],
+    'saga' => [
+        'max_tentativas_compensacao' => (int) env('SAGA_MAX_TENTATIVAS_COMPENSACAO', 3),
+    ],
+
+    'handlers' => array_fill_keys(
+        Application\Saga\OrquestradorSagaOS::EVENTOS,
+        Application\Saga\OrquestradorSagaOS::class,
+    ),
 ];
