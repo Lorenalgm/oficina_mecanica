@@ -140,7 +140,7 @@ class ProcessadorDeMensagensTest extends TestCase
     {
         $this->handler->aoTratar = function () {
             DB::table('outbox')->insert([
-                'id' => Envelope::novoUuid(),
+                'message_id' => Envelope::novoUuid(),
                 'type' => 'billing.cmd.cobrar',
                 'saga_id' => self::SAGA_ID,
                 'corpo' => '{}',

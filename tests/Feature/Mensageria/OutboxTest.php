@@ -43,7 +43,7 @@ class OutboxTest extends TestCase
         (new OutboxPublisher())->publicar($envelope);
 
         $linha = DB::table('outbox')->first();
-        $this->assertSame($envelope->messageId, $linha->id);
+        $this->assertSame($envelope->messageId, $linha->message_id);
         $this->assertSame('billing.cmd.gerar-orcamento', $linha->type);
         $this->assertSame(self::SAGA_ID, $linha->saga_id);
         $this->assertSame($envelope->paraJson(), $linha->corpo);
@@ -64,13 +64,12 @@ class OutboxTest extends TestCase
         $this->assertSame(0, DB::table('outbox')->count());
     }
 
-    public function test_relay_publica_pendentes_em_ordem_e_marca_como_publicadas(): void
+    public function test_relay_publica_na_ordem_de_gravacao_mesmo_no_mesmo_segundo_e_marca_como_publicadas(): void
     {
         $publisher = new OutboxPublisher();
         $primeira = $this->envelope('billing.cmd.gerar-orcamento');
         $segunda = $this->envelope('execucao.cmd.enfileirar');
         $publisher->publicar($primeira);
-        $this->travessiaDeTempo();
         $publisher->publicar($segunda);
 
         $publicadas = $this->relay()->publicarPendentes(10);
@@ -119,27 +118,20 @@ class OutboxTest extends TestCase
         $publisher = new OutboxPublisher();
         $primeira = $this->envelope();
         $publisher->publicar($primeira);
-        $this->travessiaDeTempo();
         $segunda = $this->envelope();
         $publisher->publicar($segunda);
-        $this->travessiaDeTempo();
         $publisher->publicar($this->envelope());
         $this->broker->falharNaPublicacao = 1;
 
         $publicadas = $this->relay()->publicarPendentes(10);
 
         $this->assertSame(1, $publicadas);
-        $this->assertNotNull(DB::table('outbox')->where('id', $primeira->messageId)->value('publicado_em'));
-        $this->assertNull(DB::table('outbox')->where('id', $segunda->messageId)->value('publicado_em'));
+        $this->assertNotNull(DB::table('outbox')->where('message_id', $primeira->messageId)->value('publicado_em'));
+        $this->assertNull(DB::table('outbox')->where('message_id', $segunda->messageId)->value('publicado_em'));
         $this->assertSame(2, DB::table('outbox')->whereNull('publicado_em')->count());
         Log::shouldHaveReceived('error')->withArgs(
             fn ($mensagem, $contexto) => $contexto['event_type'] === 'mensageria.outbox_falhou'
                 && $contexto['message_id'] === $segunda->messageId
         )->once();
-    }
-
-    private function travessiaDeTempo(): void
-    {
-        $this->travel(1)->seconds();
     }
 }

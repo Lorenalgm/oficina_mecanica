@@ -28,7 +28,7 @@ class SolicitarOrcamentoTest extends TestCase
 
     private function comandos(): array
     {
-        return DB::table('outbox')->orderBy('criado_em')->pluck('corpo')
+        return DB::table('outbox')->orderBy('id')->pluck('corpo')
             ->map(fn (string $c) => Envelope::deJson($c))->all();
     }
 
