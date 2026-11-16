@@ -38,8 +38,6 @@ jobs:
           # e sem um driver o `php artisan test` sai com exit 1 mesmo com tudo verde.
           extensions: pcov, pdo, pdo_sqlite, zip, mbstring, bcmath
           coverage: pcov
-          # Sem isso o PCOV só instrumenta src/ (detecção automática) e
-          # tudo em app/ aparece com 0% de cobertura no Sonar.
           ini-values: pcov.directory=., pcov.exclude="~vendor~"
 
       - name: Install dependencies
