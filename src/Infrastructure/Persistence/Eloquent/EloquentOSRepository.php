@@ -4,18 +4,15 @@ namespace Infrastructure\Persistence\Eloquent;
 
 use App\Models\Insumo as InsumoModel;
 use App\Models\OS as OSModel;
-use App\Models\OSOrcamento as OSOrcamentoModel;
 use App\Models\OSServico as OSServicoModel;
 use App\Models\OSServicoInsumo as OSServicoInsumoModel;
 use App\Models\OSStatus as OSStatusModel;
 use App\Models\Servico as ServicoModel;
 use App\Models\Status as StatusModel;
 use Domain\Atendimento\Entities\OS;
-use Domain\Atendimento\Entities\OSOrcamento;
 use Domain\Atendimento\Entities\OSServico;
 use Domain\Atendimento\Entities\OSServicoInsumo;
 use Domain\Atendimento\Enums\PrioridadeStatus;
-use Domain\Atendimento\Enums\StatusOrcamento;
 use Domain\Atendimento\Filters\FiltroListagemOS;
 use Domain\Atendimento\Repositories\OSRepository;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +26,6 @@ class EloquentOSRepository implements OSRepository
         'servicos.servico',
         'servicos.insumos.insumo',
         'historicoStatus.status',
-        'orcamento',
     ];
 
     public function findById(int $id): ?OS
@@ -99,19 +95,6 @@ class EloquentOSRepository implements OSRepository
             ->first();
 
         return $model ? OSMapper::toEntity($model) : null;
-    }
-
-    public function findByApprovalToken(string $token): ?OS
-    {
-        if ($token === '') {
-            return null;
-        }
-
-        $model = OSModel::with(self::RELACOES_DETALHE)
-            ->whereHas('orcamento', fn ($q) => $q->where('approval_token', $token))
-            ->first();
-
-        return $model ? OSMapper::toDetailEntity($model) : null;
     }
 
     public function findStatusIdByNome(string $nome): ?int
@@ -186,28 +169,6 @@ class EloquentOSRepository implements OSRepository
         );
     }
 
-    public function criarOrcamento(int $osId, float $valorTotal): OSOrcamento
-    {
-        $model = OSOrcamentoModel::create([
-            'os_id' => $osId,
-            'valor_total' => $valorTotal,
-            'data_orcamento' => now(),
-            'status' => StatusOrcamento::Pendente->value,
-            'approval_token' => bin2hex(random_bytes(20)),
-        ]);
-
-        return $this->toOrcamentoEntity($model);
-    }
-
-    public function salvarOrcamento(OSOrcamento $orcamento): void
-    {
-        $model = OSOrcamentoModel::findOrFail($orcamento->getId());
-        $model->status = $orcamento->getStatus()->value;
-        $model->data_aprovacao = $orcamento->getDataAprovacao();
-        $model->approval_token = $orcamento->getApprovalToken();
-        $model->save();
-    }
-
     public function calcularTempoMedioMinutos(): ?float
     {
         $execId = $this->findStatusIdByNome('Em execução');
@@ -258,18 +219,5 @@ class EloquentOSRepository implements OSRepository
         $sql .= ' ELSE 99 END';
 
         return [$sql, $bindings];
-    }
-
-    private function toOrcamentoEntity(OSOrcamentoModel $model): OSOrcamento
-    {
-        return new OSOrcamento(
-            id: $model->id,
-            osId: (int) $model->os_id,
-            valorTotal: (float) $model->valor_total,
-            dataOrcamento: $model->data_orcamento,
-            dataAprovacao: $model->data_aprovacao,
-            status: StatusOrcamento::from($model->status),
-            approvalToken: $model->approval_token,
-        );
     }
 }

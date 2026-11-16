@@ -10,18 +10,15 @@ use App\Http\Resources\OSResource;
 use Application\OS\UseCases\AdicionarInsumoNoServico;
 use Application\OS\UseCases\AdicionarServicoNaOS;
 use Application\OS\UseCases\AlterarStatusOS;
-use Application\OS\UseCases\AprovarOrcamento;
 use Application\OS\UseCases\CalcularTempoMedio;
 use Application\OS\UseCases\ConsultarOSPublica;
 use Application\OS\UseCases\CriarOS;
 use Application\OS\UseCases\DetalharOS;
 use Application\OS\UseCases\ListarOS;
-use Application\OS\UseCases\RecusarOrcamento;
 use Application\Saga\UseCases\IniciarSagaOS;
 use App\Support\CorrelationContext;
 use Domain\Atendimento\Entities\OS;
 use Domain\Atendimento\Saga\SagaJaAtiva;
-use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Atendimento\Filters\FiltroListagemOS;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,8 +34,6 @@ class OSController extends Controller
         private AdicionarServicoNaOS $adicionarServico,
         private AdicionarInsumoNoServico $adicionarInsumo,
         private IniciarSagaOS $iniciarSaga,
-        private AprovarOrcamento $aprovarOrcamento,
-        private RecusarOrcamento $recusarOrcamento,
         private AlterarStatusOS $alterarStatus,
         private CalcularTempoMedio $calcularTempoMedio,
         private ConsultarOSPublica $consultarOSPublica,
@@ -145,39 +140,6 @@ class OSController extends Controller
         ]], 202);
     }
 
-    public function aprovarOrcamento(Request $request, int $id): JsonResponse
-    {
-        try {
-            $orcamento = $this->aprovarOrcamento->executar($id, $this->extrairToken($request));
-
-            return response()->json(['data' => [
-                'id' => $orcamento->getId(),
-                'status' => $orcamento->getStatus()->value,
-                'data_aprovacao' => $orcamento->getDataAprovacao(),
-            ]]);
-        } catch (TokenAprovacaoInvalido $e) {
-            return response()->json(['message' => $e->getMessage()], 401);
-        } catch (\RuntimeException $e) {
-            return $this->falhaNoProcessamento($e, $id);
-        }
-    }
-
-    public function recusarOrcamento(Request $request, int $id): JsonResponse
-    {
-        try {
-            $orcamento = $this->recusarOrcamento->executar($id, $this->extrairToken($request));
-
-            return response()->json(['data' => [
-                'id' => $orcamento->getId(),
-                'status' => $orcamento->getStatus()->value,
-            ]]);
-        } catch (TokenAprovacaoInvalido $e) {
-            return response()->json(['message' => $e->getMessage()], 401);
-        } catch (\RuntimeException $e) {
-            return $this->falhaNoProcessamento($e, $id);
-        }
-    }
-
     private function falhaNoProcessamento(\RuntimeException $e, int $osId): JsonResponse
     {
         Log::error($e->getMessage(), [
@@ -187,13 +149,6 @@ class OSController extends Controller
         ]);
 
         return response()->json(['message' => $e->getMessage()], 422);
-    }
-
-    private function extrairToken(Request $request): ?string
-    {
-        $token = $request->input('token', $request->query('token'));
-
-        return is_string($token) && $token !== '' ? $token : null;
     }
 
     public function alterarStatus(PatchOSStatusRequest $request, int $id): JsonResponse

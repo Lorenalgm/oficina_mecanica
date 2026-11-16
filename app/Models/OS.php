@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class OS extends Model
 {
@@ -41,8 +40,4 @@ class OS extends Model
         return $this->hasMany(OSStatus::class, 'os_id');
     }
 
-    public function orcamento(): HasOne
-    {
-        return $this->hasOne(OSOrcamento::class, 'os_id');
-    }
 }

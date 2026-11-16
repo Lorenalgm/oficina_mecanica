@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use Domain\Atendimento\Entities\OS;
-use Domain\Atendimento\Entities\OSOrcamento;
 use Domain\Atendimento\Entities\OSServico;
 use Domain\Atendimento\Entities\OSServicoInsumo;
 use Domain\Atendimento\Entities\OSStatus;
@@ -64,18 +63,6 @@ class OSResource extends JsonResource
                     : null,
                 'data_status' => $h->getDataStatus(),
             ], $os->getHistoricoStatus());
-        }
-
-        if ($os->getOrcamento() !== null) {
-            /** @var OSOrcamento $orc */
-            $orc = $os->getOrcamento();
-            $data['orcamento'] = [
-                'id' => $orc->getId(),
-                'valor_total' => $orc->getValorTotal(),
-                'status' => $orc->getStatus(),
-                'data_orcamento' => $orc->getDataOrcamento(),
-                'data_aprovacao' => $orc->getDataAprovacao(),
-            ];
         }
 
         return $data;

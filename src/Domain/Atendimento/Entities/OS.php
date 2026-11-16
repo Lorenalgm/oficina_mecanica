@@ -3,7 +3,6 @@
 namespace Domain\Atendimento\Entities;
 
 use DateTimeInterface;
-use RuntimeException;
 
 class OS
 {
@@ -13,7 +12,6 @@ class OS
     private ?string $clienteNome = null;
     private ?string $veiculoPlaca = null;
     private ?DateTimeInterface $createdAt = null;
-    private ?OSOrcamento $orcamento = null;
     private ?array $servicos = null;
     private ?array $historicoStatus = null;
 
@@ -36,7 +34,6 @@ class OS
     public function getClienteNome(): ?string { return $this->clienteNome; }
     public function getVeiculoPlaca(): ?string { return $this->veiculoPlaca; }
     public function getCreatedAt(): ?DateTimeInterface { return $this->createdAt; }
-    public function getOrcamento(): ?OSOrcamento { return $this->orcamento; }
     public function getServicos(): ?array { return $this->servicos; }
     public function getHistoricoStatus(): ?array { return $this->historicoStatus; }
 
@@ -44,39 +41,12 @@ class OS
     public function setClienteNome(?string $nome): void { $this->clienteNome = $nome; }
     public function setVeiculoPlaca(?string $placa): void { $this->veiculoPlaca = $placa; }
     public function setCreatedAt(?DateTimeInterface $dt): void { $this->createdAt = $dt; }
-    public function setOrcamento(?OSOrcamento $orcamento): void { $this->orcamento = $orcamento; }
     public function setServicos(?array $servicos): void { $this->servicos = $servicos; }
     public function setHistoricoStatus(?array $historico): void { $this->historicoStatus = $historico; }
 
     public function alterarStatus(int $novoStatusId): void
     {
         $this->statusAtualId = $novoStatusId;
-    }
-
-    /**
-     * Calcula o valor total do orçamento somando o valor de cada serviço e
-     * o valor dos insumos (valor unitário × quantidade) associados à OS.
-     * Exige que os serviços tenham sido carregados com seus valores.
-     */
-    public function calcularValorOrcamento(): float
-    {
-        if (empty($this->servicos)) {
-            throw new RuntimeException('A OS não possui serviços para gerar orçamento.');
-        }
-
-        $valorTotal = 0.0;
-
-        /** @var OSServico $servico */
-        foreach ($this->servicos as $servico) {
-            $valorTotal += (float) $servico->getServicoValor();
-
-            /** @var OSServicoInsumo $insumo */
-            foreach ($servico->getInsumos() ?? [] as $insumo) {
-                $valorTotal += (float) $insumo->getInsumoValor() * $insumo->getQuantidade();
-            }
-        }
-
-        return $valorTotal;
     }
 
     /**
