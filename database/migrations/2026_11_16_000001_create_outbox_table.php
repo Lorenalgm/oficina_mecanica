@@ -9,14 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('outbox', function (Blueprint $table) {
-            $table->uuid('id')->primary();
+            $table->id();
+            $table->uuid('message_id')->unique();
             $table->string('type');
             $table->uuid('saga_id');
             $table->text('corpo');
             $table->timestamp('criado_em');
             $table->timestamp('publicado_em')->nullable();
 
-            $table->index(['publicado_em', 'criado_em']);
+            $table->index(['publicado_em', 'id']);
         });
     }
 

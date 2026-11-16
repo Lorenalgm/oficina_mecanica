@@ -13,9 +13,11 @@ class StatusSeeder extends Seeder
             'Recebida',
             'Em diagnóstico',
             'Aguardando aprovação',
+            'Aguardando pagamento',
             'Em execução',
             'Finalizada',
             'Entregue',
+            'Cancelada',
         ];
 
         foreach ($status as $nome) {

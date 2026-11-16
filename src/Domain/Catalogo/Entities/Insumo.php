@@ -32,6 +32,15 @@ class Insumo
         $this->quantidadeEstoque -= $quantidade;
     }
 
+    public function devolver(int $quantidade): void
+    {
+        if ($quantidade < 0) {
+            throw new InvalidArgumentException('A quantidade para devolução não pode ser negativa.');
+        }
+
+        $this->quantidadeEstoque += $quantidade;
+    }
+
     public function atualizar(string $nome, float $valor, int $quantidadeEstoque): void
     {
         $this->nome = $nome;

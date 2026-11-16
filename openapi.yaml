@@ -77,6 +77,7 @@ components:
         cliente_id: { type: integer }
         veiculo_id: { type: integer }
         descricao_problema: { type: string }
+        filial: { type: string, example: MATRIZ }
         status_atual:
           type: object
           properties:
@@ -140,15 +141,44 @@ components:
                   id: { type: integer }
                   nome: { type: string }
               data_status: { type: string, format: date-time }
+
+    Saga:
+      type: object
+      properties:
+        saga_id: { type: string, format: uuid }
+        os_id: { type: integer }
+        correlation_id: { type: string }
+        estado:
+          type: string
+          enum: [aguardando_orcamento, aguardando_aprovacao, reservando_estoque, aguardando_pagamento, aguardando_execucao, concluida, compensando, compensada, compensacao_falhou]
+        ativa: { type: boolean }
         orcamento:
           type: object
-          nullable: true
           properties:
-            id: { type: integer }
-            valor_total: { type: number }
-            status: { type: string, enum: [pendente, aprovado, recusado] }
-            data_orcamento: { type: string, format: date-time }
-            data_aprovacao: { type: string, format: date-time, nullable: true }
+            id: { type: integer, nullable: true }
+            valor_total: { type: integer, nullable: true, description: Em centavos }
+            link_aprovacao: { type: string, nullable: true }
+        pagamento:
+          type: object
+          properties:
+            id: { type: integer, nullable: true }
+            link_pagamento: { type: string, nullable: true }
+        execucao_id: { type: string, nullable: true }
+        estoque_baixado: { type: boolean }
+        motivo_falha: { type: string, nullable: true }
+        compensacoes_pendentes:
+          type: array
+          items: { type: string, enum: [estornar_pagamento, devolver_estoque, cancelar_orcamento, cancelar_os] }
+        tentativas_compensacao: { type: integer }
+        passos:
+          type: array
+          description: Linha do tempo com comandos enviados, eventos recebidos e compensações locais.
+          items:
+            type: object
+            properties:
+              passo: { type: string, example: billing.evt.orcamento-gerado }
+              detalhes: { type: object }
+              registrado_em: { type: string, format: date-time }
 
     Error:
       type: object
@@ -622,6 +652,11 @@ paths:
                 veiculo_id: { type: integer }
                 cliente_id: { type: integer }
                 descricao_problema: { type: string, example: Barulho no motor ao acelerar }
+                filial:
+                  type: string
+                  description: Unidade que atende a OS (letras, números, - e _). Usada pela fila de execução.
+                  default: MATRIZ
+                  example: SP-CENTRO
                 servicos:
                   type: array
                   description: >-
@@ -823,15 +858,15 @@ paths:
         schema: { type: integer }
     post:
       tags: [Ordens de Serviço]
-      summary: Gerar orçamento
+      summary: Solicitar orçamento (inicia a Saga)
       description: >-
-        Calcula o valor total com base nos serviços e insumos e muda o status para Aguardando aprovação.
-        Gera um approval_token (uso único) retornado apenas nesta resposta — ele autentica a
-        aprovação/recusa externa do orçamento nas rotas públicas correspondentes.
+        Inicia a Saga da OS: envia ao Billing Service o pedido de orçamento com os serviços e
+        insumos e muda o status para Em diagnóstico. O orçamento, a aprovação pelo cliente e o
+        pagamento acontecem no Billing; acompanhe pelo GET /api/os/{id}/saga.
       security: [{ jwt: [] }]
       responses:
-        201:
-          description: Orçamento gerado
+        202:
+          description: Saga iniciada
           content:
             application/json:
               schema:
@@ -840,111 +875,44 @@ paths:
                   data:
                     type: object
                     properties:
-                      id: { type: integer }
+                      saga_id: { type: string, format: uuid }
                       os_id: { type: integer }
-                      valor_total: { type: number }
-                      status: { type: string, enum: [pendente, aprovado, recusado] }
-                      data_orcamento: { type: string, format: date-time }
-                      approval_token:
-                        type: string
-                        description: Token de uso único para aprovar/recusar o orçamento externamente.
-                        example: 3f9a1c2b7d8e4f0a1b2c3d4e5f6a7b8c9d0e1f2a
-        422:
-          description: OS sem serviços cadastrados
-
-  /api/os/{id}/orcamento/aprovar:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer }
-    post:
-      tags: [Ordens de Serviço]
-      summary: Aprovar orçamento (webhook público)
-      description: >-
-        Rota PÚBLICA (sem autenticação Sanctum) que simula uma notificação externa de aprovação.
-        Exige o approval_token gerado na criação do orçamento (via query string ou corpo).
-        Baixa o estoque dos insumos utilizados e muda o status da OS para Em execução.
-        O token é de uso único e é invalidado após o uso.
-      security: []
-      parameters:
-        - name: token
-          in: query
-          required: false
-          description: Token de aprovação (aceito também no corpo da requisição).
-          schema: { type: string }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token: { type: string }
-      responses:
-        200:
-          description: Orçamento aprovado
+                      estado: { type: string, example: aguardando_orcamento }
+                      acompanhar: { type: string, example: /api/os/42/saga }
+        409:
+          description: A OS já tem uma Saga em andamento
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    type: object
-                    properties:
-                      id: { type: integer }
-                      status: { type: string, enum: [aprovado] }
-                      data_aprovacao: { type: string, format: date-time }
-        401:
-          description: Token de aprovação ausente ou inválido
+                  message: { type: string }
+                  saga_id: { type: string, format: uuid }
         422:
-          description: Estoque insuficiente ou orçamento não está pendente
+          description: OS não encontrada ou sem serviços cadastrados
 
-  /api/os/{id}/orcamento/recusar:
+  /api/os/{id}/saga:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: integer }
-    post:
+    get:
       tags: [Ordens de Serviço]
-      summary: Recusar orçamento (webhook público)
-      description: >-
-        Rota PÚBLICA (sem autenticação Sanctum) que simula uma notificação externa de recusa.
-        Exige o approval_token gerado na criação do orçamento (via query string ou corpo).
-        O token é de uso único e é invalidado após o uso.
-      security: []
-      parameters:
-        - name: token
-          in: query
-          required: false
-          description: Token de aprovação (aceito também no corpo da requisição).
-          schema: { type: string }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token: { type: string }
+      summary: Acompanhar a Saga da OS
+      description: Estado da Saga mais recente da OS, links enviados ao cliente, compensações pendentes e linha do tempo.
+      security: [{ jwt: [] }]
       responses:
         200:
-          description: Orçamento recusado
+          description: Saga encontrada
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    type: object
-                    properties:
-                      id: { type: integer }
-                      status: { type: string, enum: [recusado] }
-        401:
-          description: Token de aprovação ausente ou inválido
-        422:
-          description: Orçamento não está pendente
+                  data: { $ref: '#/components/schemas/Saga' }
+        404:
+          description: A OS não tem Saga
 
   /api/os/tempo-medio:
     get:

@@ -4,11 +4,9 @@ namespace Infrastructure\Persistence\Eloquent;
 
 use App\Models\OS as OSModel;
 use Domain\Atendimento\Entities\OS;
-use Domain\Atendimento\Entities\OSOrcamento;
 use Domain\Atendimento\Entities\OSServico;
 use Domain\Atendimento\Entities\OSServicoInsumo;
 use Domain\Atendimento\Entities\OSStatus;
-use Domain\Atendimento\Enums\StatusOrcamento;
 
 class OSMapper
 {
@@ -20,6 +18,7 @@ class OSMapper
             veiculoId: (int) $model->veiculo_id,
             statusAtualId: (int) $model->status_atual_id,
             descricaoProblema: $model->descricao_problema,
+            filial: $model->filial ?? OS::FILIAL_PADRAO,
         );
 
         if ($model->relationLoaded('statusAtual') && $model->statusAtual) {
@@ -42,19 +41,6 @@ class OSMapper
     public static function toDetailEntity(OSModel $model): OS
     {
         $os = self::toEntity($model);
-
-        if ($model->relationLoaded('orcamento') && $model->orcamento) {
-            $orc = $model->orcamento;
-            $os->setOrcamento(new OSOrcamento(
-                id: $orc->id,
-                osId: (int) $orc->os_id,
-                valorTotal: (float) $orc->valor_total,
-                dataOrcamento: $orc->data_orcamento,
-                dataAprovacao: $orc->data_aprovacao,
-                status: StatusOrcamento::from($orc->status),
-                approvalToken: $orc->approval_token,
-            ));
-        }
 
         if ($model->relationLoaded('servicos')) {
             $servicos = $model->servicos->map(function ($osServico) {
@@ -114,6 +100,7 @@ class OSMapper
             'veiculo_id' => $os->getVeiculoId(),
             'status_atual_id' => $os->getStatusAtualId(),
             'descricao_problema' => $os->getDescricaoProblema(),
+            'filial' => $os->getFilial(),
         ];
     }
 }

@@ -6,7 +6,6 @@ use App\Models\Cliente;
 use App\Models\Insumo;
 use App\Models\OS;
 use App\Models\OSServico;
-use App\Models\OSOrcamento;
 use App\Models\Servico;
 use App\Models\Status;
 use App\Models\Veiculo;
@@ -67,7 +66,32 @@ class OSTest extends TestCase
         ], $this->headers())
             ->assertStatus(201)
             ->assertJsonPath('data.descricao_problema', 'Troca de óleo')
-            ->assertJsonPath('data.status_atual.nome', 'Recebida');
+            ->assertJsonPath('data.status_atual.nome', 'Recebida')
+            ->assertJsonPath('data.filial', 'MATRIZ');
+    }
+
+    public function test_criar_os_em_filial_informada(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Troca de óleo',
+            'filial' => 'sp-centro',
+        ], $this->headers())
+            ->assertStatus(201)
+            ->assertJsonPath('data.filial', 'SP-CENTRO');
+    }
+
+    public function test_criar_os_com_filial_invalida_retorna_422(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Troca de óleo',
+            'filial' => 'filial com espaço',
+        ], $this->headers())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('filial');
     }
 
     public function test_criar_os_sem_campos_obrigatorios_retorna_422(): void
@@ -158,7 +182,7 @@ class OSTest extends TestCase
             ->assertJsonPath('data.quantidade', 2);
     }
 
-    public function test_gerar_orcamento(): void
+    public function test_solicitar_orcamento_inicia_a_saga(): void
     {
         $os = $this->criarOS();
         $osServico = OSServico::create(['os_id' => $os->id, 'servico_id' => $this->servico->id]);
@@ -169,73 +193,8 @@ class OSTest extends TestCase
         ]);
 
         $this->postJson("/api/os/{$os->id}/orcamento", [], $this->headers())
-            ->assertStatus(201)
-            ->assertJsonPath('data.status', 'pendente')
-            ->assertJson(['data' => ['valor_total' => 200]]);
-    }
-
-    public function test_aprovar_orcamento_reduz_estoque(): void
-    {
-        $os = $this->criarOS();
-        $osServico = OSServico::create(['os_id' => $os->id, 'servico_id' => $this->servico->id]);
-        \App\Models\OSServicoInsumo::create([
-            'os_servico_id' => $osServico->id,
-            'insumo_id' => $this->insumo->id,
-            'quantidade' => 3,
-        ]);
-        OSOrcamento::create([
-            'os_id' => $os->id,
-            'valor_total' => 150.00,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-            'approval_token' => 'token-aprovar-123',
-        ]);
-
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-aprovar-123'])
-            ->assertStatus(200)
-            ->assertJsonPath('data.status', 'aprovado');
-
-        $this->assertEquals(7, $this->insumo->fresh()->quantidade_estoque);
-    }
-
-    public function test_aprovar_orcamento_com_estoque_insuficiente_retorna_422(): void
-    {
-        $this->insumo->update(['quantidade_estoque' => 1]);
-        $os = $this->criarOS();
-        $osServico = OSServico::create(['os_id' => $os->id, 'servico_id' => $this->servico->id]);
-        \App\Models\OSServicoInsumo::create([
-            'os_servico_id' => $osServico->id,
-            'insumo_id' => $this->insumo->id,
-            'quantidade' => 5,
-        ]);
-        OSOrcamento::create([
-            'os_id' => $os->id,
-            'valor_total' => 250.00,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-            'approval_token' => 'token-estoque-insuf',
-        ]);
-
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-estoque-insuf'])
-            ->assertStatus(422);
-
-        $this->assertEquals(1, $this->insumo->fresh()->quantidade_estoque);
-    }
-
-    public function test_recusar_orcamento(): void
-    {
-        $os = $this->criarOS();
-        OSOrcamento::create([
-            'os_id' => $os->id,
-            'valor_total' => 100.00,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-            'approval_token' => 'token-recusar-123',
-        ]);
-
-        $this->postJson("/api/os/{$os->id}/orcamento/recusar", ['token' => 'token-recusar-123'])
-            ->assertStatus(200)
-            ->assertJsonPath('data.status', 'recusado');
+            ->assertStatus(202)
+            ->assertJsonPath('data.estado', 'aguardando_orcamento');
     }
 
     public function test_alterar_status_os(): void
@@ -332,26 +291,11 @@ class OSTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_gerar_orcamento_sem_servicos_retorna_422(): void
+    public function test_solicitar_orcamento_sem_servicos_retorna_422(): void
     {
         $os = $this->criarOS();
 
         $this->postJson("/api/os/{$os->id}/orcamento", [], $this->headers())
-            ->assertStatus(422);
-    }
-
-    public function test_recusar_orcamento_ja_recusado_retorna_422(): void
-    {
-        $os = $this->criarOS();
-        \App\Models\OSOrcamento::create([
-            'os_id' => $os->id,
-            'valor_total' => 100.00,
-            'data_orcamento' => now(),
-            'status' => 'recusado',
-            'approval_token' => 'token-ja-recusado',
-        ]);
-
-        $this->postJson("/api/os/{$os->id}/orcamento/recusar", ['token' => 'token-ja-recusado'])
             ->assertStatus(422);
     }
 

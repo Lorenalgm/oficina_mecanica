@@ -4,12 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\StatusOSAtualizado;
 use App\Models\Cliente;
-use App\Models\Insumo;
 use App\Models\OS;
-use App\Models\OSOrcamento;
-use App\Models\OSServico;
-use App\Models\OSServicoInsumo;
-use App\Models\Servico;
 use App\Models\Status;
 use App\Models\Veiculo;
 use Database\Seeders\StatusSeeder;
@@ -79,14 +74,16 @@ class OSFase2Test extends TestCase
         $this->criarOSComStatus('Recebida');
         $this->criarOSComStatus('Em diagnóstico');
         $this->criarOSComStatus('Aguardando aprovação');
+        $this->criarOSComStatus('Aguardando pagamento');
         $this->criarOSComStatus('Em execução');
+        $this->criarOSComStatus('Cancelada');
 
         $resposta = $this->getJson('/api/os', $this->headers())->assertStatus(200);
 
         $nomes = array_map(fn ($os) => $os['status_atual']['nome'], $resposta->json('data'));
 
         $this->assertSame(
-            ['Em execução', 'Aguardando aprovação', 'Em diagnóstico', 'Recebida'],
+            ['Em execução', 'Aguardando pagamento', 'Aguardando aprovação', 'Em diagnóstico', 'Recebida'],
             $nomes,
         );
     }
@@ -101,72 +98,6 @@ class OSFase2Test extends TestCase
         $ids = array_map(fn ($os) => $os['id'], $resposta->json('data'));
 
         $this->assertSame([$antiga->id, $recente->id], $ids);
-    }
-
-    // ---- 7.5 Webhook público de aprovação/recusa ----
-
-    private function criarOSComOrcamentoPendente(string $token): OS
-    {
-        $servico = Servico::factory()->create(['valor' => 100.00]);
-        $insumo = Insumo::factory()->create(['valor' => 50.00, 'quantidade_estoque' => 10]);
-        $os = $this->criarOSComStatus('Aguardando aprovação');
-        $osServico = OSServico::create(['os_id' => $os->id, 'servico_id' => $servico->id]);
-        OSServicoInsumo::create([
-            'os_servico_id' => $osServico->id,
-            'insumo_id' => $insumo->id,
-            'quantidade' => 2,
-        ]);
-        OSOrcamento::create([
-            'os_id' => $os->id,
-            'valor_total' => 200.00,
-            'data_orcamento' => now(),
-            'status' => 'pendente',
-            'approval_token' => $token,
-        ]);
-
-        return $os;
-    }
-
-    public function test_aprovar_sem_token_retorna_401(): void
-    {
-        $os = $this->criarOSComOrcamentoPendente('token-webhook');
-
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", [])
-            ->assertStatus(401);
-
-        $this->assertDatabaseHas('os_orcamentos', ['os_id' => $os->id, 'status' => 'pendente']);
-    }
-
-    public function test_recusar_sem_token_retorna_401(): void
-    {
-        $os = $this->criarOSComOrcamentoPendente('token-webhook');
-
-        $this->postJson("/api/os/{$os->id}/orcamento/recusar", [])
-            ->assertStatus(401);
-
-        $this->assertDatabaseHas('os_orcamentos', ['os_id' => $os->id, 'status' => 'pendente']);
-    }
-
-    public function test_aprovar_com_token_valido_e_publico(): void
-    {
-        $os = $this->criarOSComOrcamentoPendente('token-webhook');
-
-        // Sem cabeçalho de autenticação — rota pública.
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-webhook'])
-            ->assertStatus(200)
-            ->assertJsonPath('data.status', 'aprovado');
-    }
-
-    public function test_token_reusado_retorna_401(): void
-    {
-        $os = $this->criarOSComOrcamentoPendente('token-webhook');
-
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-webhook'])
-            ->assertStatus(200);
-
-        // Token já consumido (uso único) — replay rejeitado.
-        $this->postJson("/api/os/{$os->id}/orcamento/aprovar", ['token' => 'token-webhook'])
-            ->assertStatus(401);
     }
 
     // ---- 7.6 E-mail na alteração de status ----

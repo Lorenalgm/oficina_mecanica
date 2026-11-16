@@ -5,10 +5,6 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [\App\Http\Controllers\Api\AuthController::class, 'login']);
 Route::get('/consulta-publica', [\App\Http\Controllers\Api\OSController::class, 'consultaPublica']);
 
-// Aprovação/recusa de orçamento como notificação externa (webhook público), protegida por approval_token.
-Route::post('/os/{id}/orcamento/aprovar', [\App\Http\Controllers\Api\OSController::class, 'aprovarOrcamento']);
-Route::post('/os/{id}/orcamento/recusar', [\App\Http\Controllers\Api\OSController::class, 'recusarOrcamento']);
-
 // Logout encerra um token do Sanctum (painel interno), não o JWT emitido pela
 // Lambda — por isso continua no guard do Sanctum.
 Route::middleware('auth:sanctum')->post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
@@ -30,6 +26,7 @@ Route::middleware('jwt')->group(function () {
         Route::patch('/{id}/status', [\App\Http\Controllers\Api\OSController::class, 'alterarStatus']);
         Route::post('/{id}/servicos', [\App\Http\Controllers\Api\OSController::class, 'adicionarServico']);
         Route::post('/{id}/servicos/{osServicoId}/insumos', [\App\Http\Controllers\Api\OSController::class, 'adicionarInsumo']);
-        Route::post('/{id}/orcamento', [\App\Http\Controllers\Api\OSController::class, 'gerarOrcamento']);
+        Route::post('/{id}/orcamento', [\App\Http\Controllers\Api\OSController::class, 'solicitarOrcamento']);
+        Route::get('/{id}/saga', [\App\Http\Controllers\Api\SagaController::class, 'show']);
     });
 });

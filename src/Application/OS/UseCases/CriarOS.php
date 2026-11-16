@@ -17,7 +17,13 @@ class CriarOS
      *
      * @param array<int, array{servico_id: int, insumos?: array<int, array{insumo_id: int, quantidade?: int}>}> $servicos
      */
-    public function executar(int $veiculoId, int $clienteId, string $descricaoProblema, array $servicos = []): OS
+    public function executar(
+        int $veiculoId,
+        int $clienteId,
+        string $descricaoProblema,
+        array $servicos = [],
+        string $filial = OS::FILIAL_PADRAO,
+    ): OS
     {
         $statusId = $this->repositorio->findStatusIdByNome('Recebida');
 
@@ -48,6 +54,7 @@ class CriarOS
             veiculoId: $veiculoId,
             statusAtualId: $statusId,
             descricaoProblema: $descricaoProblema,
+            filial: strtoupper($filial),
         );
 
         $os = $this->repositorio->save($os);

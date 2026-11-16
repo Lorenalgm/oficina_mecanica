@@ -25,7 +25,6 @@ class OutboxRelay
         return DB::transaction(function () use ($lote) {
             $pendentes = DB::table('outbox')
                 ->whereNull('publicado_em')
-                ->orderBy('criado_em')
                 ->orderBy('id')
                 ->limit($lote)
                 ->lock('for update skip locked')
@@ -45,7 +44,7 @@ class OutboxRelay
                 } catch (Throwable $e) {
                     Log::error('Falha ao publicar mensagem da outbox', [
                         'event_type' => 'mensageria.outbox_falhou',
-                        'message_id' => $linha->id,
+                        'message_id' => $linha->message_id,
                         'message_type' => $linha->type,
                         'saga_id' => $linha->saga_id,
                         'erro' => $e->getMessage(),
@@ -59,5 +58,10 @@ class OutboxRelay
 
             return $publicadas;
         });
+    }
+
+    public function reenfileirar(string $messageId): bool
+    {
+        return DB::table('outbox')->where('message_id', $messageId)->update(['publicado_em' => null]) > 0;
     }
 }

@@ -3,63 +3,13 @@
 namespace Tests\Unit\Domain\Atendimento\Entities;
 
 use Carbon\Carbon;
-use Domain\Atendimento\Entities\OSOrcamento;
 use Domain\Atendimento\Entities\OSServico;
 use Domain\Atendimento\Entities\OSServicoInsumo;
 use Domain\Atendimento\Entities\OSStatus;
-use Domain\Atendimento\Enums\StatusOrcamento;
 use PHPUnit\Framework\TestCase;
 
 class OSEntidadesTest extends TestCase
 {
-    // OSOrcamento
-
-    public function test_orcamento_is_pendente_quando_status_pendente(): void
-    {
-        $orc = new OSOrcamento(1, 1, 100.0, Carbon::now(), null, StatusOrcamento::Pendente);
-        $this->assertTrue($orc->isPendente());
-    }
-
-    public function test_orcamento_nao_is_pendente_quando_aprovado(): void
-    {
-        $orc = new OSOrcamento(1, 1, 100.0, Carbon::now(), null, StatusOrcamento::Aprovado);
-        $this->assertFalse($orc->isPendente());
-    }
-
-    public function test_orcamento_aprovar_altera_status_e_define_data(): void
-    {
-        $orc = new OSOrcamento(1, 1, 150.0, Carbon::now(), null, StatusOrcamento::Pendente);
-        $dataAprovacao = Carbon::now();
-
-        $orc->aprovar($dataAprovacao);
-
-        $this->assertEquals(StatusOrcamento::Aprovado, $orc->getStatus());
-        $this->assertSame($dataAprovacao, $orc->getDataAprovacao());
-        $this->assertFalse($orc->isPendente());
-    }
-
-    public function test_orcamento_recusar_altera_status(): void
-    {
-        $orc = new OSOrcamento(1, 1, 150.0, Carbon::now(), null, StatusOrcamento::Pendente);
-
-        $orc->recusar();
-
-        $this->assertEquals(StatusOrcamento::Recusado, $orc->getStatus());
-        $this->assertFalse($orc->isPendente());
-    }
-
-    public function test_orcamento_getters_basicos(): void
-    {
-        $data = Carbon::now();
-        $orc = new OSOrcamento(5, 3, 200.0, $data, null, StatusOrcamento::Pendente);
-
-        $this->assertEquals(5, $orc->getId());
-        $this->assertEquals(3, $orc->getOsId());
-        $this->assertEquals(200.0, $orc->getValorTotal());
-        $this->assertSame($data, $orc->getDataOrcamento());
-        $this->assertNull($orc->getDataAprovacao());
-    }
-
     // OSServico
 
     public function test_os_servico_getters_e_setters(): void

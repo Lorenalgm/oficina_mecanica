@@ -11,7 +11,7 @@ class OutboxPublisher implements MessagePublisher
     public function publicar(Envelope $envelope): void
     {
         DB::table('outbox')->insert([
-            'id' => $envelope->messageId,
+            'message_id' => $envelope->messageId,
             'type' => $envelope->type,
             'saga_id' => $envelope->sagaId,
             'corpo' => $envelope->paraJson(),
