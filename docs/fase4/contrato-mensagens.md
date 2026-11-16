@@ -8,16 +8,20 @@ Execução Service. Qualquer mudança aqui vale para os três repositórios.
 | Recurso | Tipo | Ligação (routing key) |
 |---|---|---|
 | `oficina` | exchange `topic`, durável | — |
-| `oficina.dlx` | exchange `topic`, durável | recebe o que esgotou as retentativas |
+| `oficina.retry` | exchange `direct`, durável | routing key = nome da fila de trabalho |
+| `oficina.dlx` | exchange `direct`, durável | routing key = nome da fila de trabalho |
 | `billing.comandos` | fila (consumida pelo Billing) | `billing.cmd.#` |
 | `execucao.comandos` | fila (consumida pela Execução) | `execucao.cmd.#` |
 | `os.saga.eventos` | fila (consumida pelo OS) | `billing.evt.#`, `execucao.evt.#` |
-| `<fila>.retry` | fila com `x-message-ttl` 5 s que devolve para `oficina` | — |
-| `<fila>.dlq` | fila ligada ao `oficina.dlx` | `#` da fila de origem |
+| `<fila>.retry` | fila com `x-message-ttl` 5 s; ao expirar, volta para `<fila>` pelo exchange padrão | ligada ao `oficina.retry` |
+| `<fila>.dlq` | fila final das mensagens rejeitadas (`<fila>` tem `x-dead-letter-exchange = oficina.dlx`) | ligada ao `oficina.dlx` |
 
 - A routing key é sempre igual ao `type` da mensagem.
 - Mensagens persistentes (`delivery_mode = 2`), publicadas com *publisher confirms*.
-- Um usuário do RabbitMQ por serviço, com permissão só no que usa.
+- Vhost `oficina`. Um usuário do RabbitMQ por serviço (`os`, `billing`,
+  `execucao`): publica só em `oficina` e `oficina.retry`, lê só a própria fila
+  e não declara nada. A topologia é criada pelo `oficina-infra-k8s`.
+- Clientes AMQP precisam negociar `frame_max` ≥ 8192 (exigência do RabbitMQ 4.1).
 
 ## Envelope (v1)
 
@@ -55,8 +59,11 @@ Regras:
 - **Idempotência:** o consumidor grava o `message_id` em
   `mensagens_processadas` (ou `processadas` no documento Mongo) na mesma
   transação do efeito. Se a mensagem se repetir, ele dá ack sem repetir o efeito.
-- **Retentativa:** em erro técnico, a mensagem vai para `<fila>.retry` e volta
-  depois de 5 s. Na 3ª falha (cabeçalho `x-tentativas`), vai para a `.dlq`.
+- **Retentativa:** em erro técnico, o consumidor republica a mensagem no
+  exchange `oficina.retry` (routing key = nome da própria fila) com o cabeçalho
+  `x-tentativas` incrementado e dá ack; ela volta depois de 5 s. Na 3ª falha,
+  ou se a mensagem for inválida, o consumidor dá `nack` sem requeue e o broker
+  a envia para a `.dlq`.
 - **Erro de negócio não é retentado:** vira um evento de falha
   (`*-falhou`, `rejeitada`) e a Saga decide o que fazer.
 - **Fora de ordem:** um evento que não cabe no estado atual da Saga (atrasado,
