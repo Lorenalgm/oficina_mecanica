@@ -38,6 +38,7 @@ jobs:
           # e sem um driver o `php artisan test` sai com exit 1 mesmo com tudo verde.
           extensions: pcov, pdo, pdo_sqlite, zip, mbstring, bcmath
           coverage: pcov
+          ini-values: pcov.directory=., pcov.exclude="~vendor~"
 
       - name: Install dependencies
         run: composer install --no-interaction --optimize-autoloader

@@ -23,6 +23,7 @@ jobs:
           php-version: '8.4'
           extensions: pcov, pdo, pdo_sqlite, zip, mbstring, bcmath
           coverage: pcov
+          ini-values: pcov.directory=., pcov.exclude="~vendor~"
 
       - name: Install dependencies
         run: composer install --no-interaction --optimize-autoloader
@@ -33,7 +34,7 @@ jobs:
           php artisan key:generate
 
       - name: Run tests with coverage
-        run: php artisan test --coverage
+        run: php artisan test --coverage --min=80
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
