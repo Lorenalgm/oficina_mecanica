@@ -128,12 +128,13 @@ jobs:
           json=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" \
             --query SecretString --output text)
 
-          leia() { echo "$json" | jq -r ".$1"; }
+          leia() { echo "$json" | jq -r ".$1 // empty"; }
 
           kubectl -n oficina create secret generic oficina-api-secrets \
             --from-literal=APP_KEY="${{ secrets.APP_KEY }}" \
             --from-literal=DB_PASSWORD="$(leia DB_PASSWORD)" \
             --from-literal=JWT_SECRET="$(leia JWT_SECRET)" \
+            --from-literal=INTERNAL_API_TOKEN="$(leia INTERNAL_API_TOKEN)" \
             --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 

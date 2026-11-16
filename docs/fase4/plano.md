@@ -136,9 +136,11 @@ Cada etapa vira um ou mais PRs na `main` do repositório indicado, com CI verde.
 - [ ] Remover a tabela `os_orcamentos` (depois do Billing no ar)
 
 ### 5. OS Service — BDD e rota interna
-- [ ] Behat com `features/saga_os.feature` em português (caminho feliz + `Esquema do Cenário` das falhas)
-- [ ] Middleware `ValidarTokenInterno` e `GET /internal/clientes/por-documento/{doc}`
-- [ ] Ingress público sem `/internal`
+- [x] Behat com `features/saga_os.feature` em português (caminho feliz + `Esquema do Cenário` das falhas)
+- [x] Middleware `ValidarTokenInterno` e `GET /internal/clientes/por-documento/{doc}`
+- [x] `/internal` exposto pelo ingress só com `X-Internal-Token` (a Lambda chama pelo NLB); o API Gateway não publica a rota
+- [x] `INTERNAL_API_TOKEN` no Secret do deploy, lido de `oficina/app`
+- [ ] `oficina-infra-db`: gerar `INTERNAL_API_TOKEN` no segredo `oficina/app` (quando a AWS for recriada)
 
 ### 6. Billing Service (`oficina-billing-service`)
 - [ ] Esqueleto Laravel com o mesmo padrão do OS (middlewares, logs JSON, `/up`)
