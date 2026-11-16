@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-worker
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oficina-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oficina-worker
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: consumidor
+          image: ghcr.io/lorenalgm/oficina-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["php", "artisan", "mensageria:consumir"]
+          envFrom: &env
+            - configMapRef:
+                name: oficina-api-config
+            - secretRef:
+                name: oficina-api-secrets
+          env:
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: plataforma-secrets
+                  key: RABBITMQ_OS_PASSWORD
+            - name: MENSAGERIA_HEARTBEAT
+              value: /tmp/consumidor.heartbeat
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -n \"$(find /tmp/consumidor.heartbeat -mmin -1)\""]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources: &recursos
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 300m
+              memory: 192Mi
+        - name: outbox
+          image: ghcr.io/lorenalgm/oficina-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["php", "artisan", "outbox:publicar", "--loop"]
+          envFrom: *env
+          env:
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: plataforma-secrets
+                  key: RABBITMQ_OS_PASSWORD
+            - name: MENSAGERIA_HEARTBEAT
+              value: /tmp/outbox.heartbeat
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -n \"$(find /tmp/outbox.heartbeat -mmin -1)\""]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources: *recursos
