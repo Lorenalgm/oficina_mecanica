@@ -48,6 +48,9 @@ jobs:
       - name: Run tests with coverage
         run: php artisan test --coverage --min=80
 
+      - name: BDD da Saga (Behat)
+        run: vendor/bin/behat --format=progress --no-colors
+
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
