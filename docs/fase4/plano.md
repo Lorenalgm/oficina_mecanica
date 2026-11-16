@@ -103,9 +103,11 @@ Cada etapa vira um ou mais PRs na `main` do repositório indicado, com CI verde.
 > `oficina-infra-db`, do `oficina-infra-k8s` e da Lambda → serviços.
 
 ### 2. Plataforma (`oficina-infra-k8s`)
-- [ ] RabbitMQ (Helm) no kind e no EKS, com plugin de management
-- [ ] Definições da topologia do contrato (exchanges, filas, retry, DLQ, usuários)
-- [ ] MongoDB (StatefulSet de 1 réplica com volume) no kind e no EKS
+- [x] RabbitMQ 4.1 (StatefulSet com volume) com plugins de management e Prometheus
+- [x] Job com a topologia do contrato (vhost, exchanges, filas, retry, DLQ, um usuário por serviço)
+- [x] MongoDB 8 (StatefulSet de 1 réplica com volume) e usuário `execucao`
+- [x] Aplicados pelo Terraform do kind (`kind/plataforma.tf`)
+- [ ] EKS: addon `aws-ebs-csi-driver` e aplicação de `plataforma/` (quando a AWS for recriada)
 - [ ] Credenciais no Secrets Manager: `oficina/rabbitmq`, `oficina/execucao`
 - [ ] New Relic coletando profundidade de fila e DLQ do RabbitMQ
 - [ ] README com o diagrama atualizado
