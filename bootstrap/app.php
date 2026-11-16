@@ -11,6 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            \Illuminate\Support\Facades\Route::middleware(['api', 'interno'])
+                ->prefix('internal')
+                ->group(base_path('routes/internal.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware) {
         // CorrelationId vem primeiro para que todo log emitido daqui em diante,
@@ -23,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'jwt' => \App\Http\Middleware\ValidarJwt::class,
+            'interno' => \App\Http\Middleware\ValidarTokenInterno::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

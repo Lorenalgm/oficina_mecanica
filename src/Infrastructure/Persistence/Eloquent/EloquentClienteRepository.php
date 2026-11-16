@@ -15,6 +15,13 @@ class EloquentClienteRepository implements ClienteRepository
         return $model ? ClienteMapper::toEntity($model) : null;
     }
 
+    public function findByDocumento(string $documento): ?Cliente
+    {
+        $model = ClienteModel::where('documento', $documento)->first();
+
+        return $model ? ClienteMapper::toEntity($model) : null;
+    }
+
     public function findAll(): array
     {
         return ClienteModel::all()

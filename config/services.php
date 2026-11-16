@@ -24,6 +24,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'interno' => [
+        'token' => env('INTERNAL_API_TOKEN'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_API_KEY', env('RESEND_KEY')),
     ],
