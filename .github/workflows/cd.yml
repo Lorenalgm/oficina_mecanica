@@ -27,6 +27,18 @@ jobs:
   tests:
     name: Build & Testes
     runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:4.1-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q check_port_connectivity"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 12
+    env:
+      RABBITMQ_TEST_HOST: 127.0.0.1
     steps:
       - uses: actions/checkout@v4
 
