@@ -14,6 +14,7 @@ class StoreOSRequest extends FormRequest
             'veiculo_id' => ['required', 'integer', 'exists:veiculos,id'],
             'cliente_id' => ['required', 'integer', 'exists:clientes,id'],
             'descricao_problema' => ['required', 'string'],
+            'filial' => ['sometimes', 'string', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/'],
 
             // Serviços e peças (insumos) são opcionais na abertura da OS.
             'servicos' => ['sometimes', 'array'],

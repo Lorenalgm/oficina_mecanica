@@ -22,6 +22,7 @@ class OSResource extends JsonResource
             'cliente_id' => $os->getClienteId(),
             'veiculo_id' => $os->getVeiculoId(),
             'descricao_problema' => $os->getDescricaoProblema(),
+            'filial' => $os->getFilial(),
             'status_atual' => ['id' => $os->getStatusAtualId(), 'nome' => $os->getStatusAtualNome()],
             'created_at' => $os->getCreatedAt(),
         ];

@@ -7,6 +7,8 @@ use RuntimeException;
 
 class OS
 {
+    public const FILIAL_PADRAO = 'MATRIZ';
+
     private ?string $statusAtualNome = null;
     private ?string $clienteNome = null;
     private ?string $veiculoPlaca = null;
@@ -21,6 +23,7 @@ class OS
         private int $veiculoId,
         private int $statusAtualId,
         private string $descricaoProblema,
+        private string $filial = self::FILIAL_PADRAO,
     ) {}
 
     public function getId(): ?int { return $this->id; }
@@ -28,6 +31,7 @@ class OS
     public function getVeiculoId(): int { return $this->veiculoId; }
     public function getStatusAtualId(): int { return $this->statusAtualId; }
     public function getDescricaoProblema(): string { return $this->descricaoProblema; }
+    public function getFilial(): string { return $this->filial; }
     public function getStatusAtualNome(): ?string { return $this->statusAtualNome; }
     public function getClienteNome(): ?string { return $this->clienteNome; }
     public function getVeiculoPlaca(): ?string { return $this->veiculoPlaca; }

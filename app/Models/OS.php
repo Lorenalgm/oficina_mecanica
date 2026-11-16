@@ -14,7 +14,7 @@ class OS extends Model
 
     protected $table = 'os';
 
-    protected $fillable = ['veiculo_id', 'cliente_id', 'status_atual_id', 'descricao_problema'];
+    protected $fillable = ['veiculo_id', 'cliente_id', 'status_atual_id', 'descricao_problema', 'filial'];
 
     public function cliente(): BelongsTo
     {

@@ -20,6 +20,7 @@ class OSMapper
             veiculoId: (int) $model->veiculo_id,
             statusAtualId: (int) $model->status_atual_id,
             descricaoProblema: $model->descricao_problema,
+            filial: $model->filial ?? OS::FILIAL_PADRAO,
         );
 
         if ($model->relationLoaded('statusAtual') && $model->statusAtual) {
@@ -114,6 +115,7 @@ class OSMapper
             'veiculo_id' => $os->getVeiculoId(),
             'status_atual_id' => $os->getStatusAtualId(),
             'descricao_problema' => $os->getDescricaoProblema(),
+            'filial' => $os->getFilial(),
         ];
     }
 }

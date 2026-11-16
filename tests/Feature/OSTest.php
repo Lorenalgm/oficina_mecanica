@@ -67,7 +67,32 @@ class OSTest extends TestCase
         ], $this->headers())
             ->assertStatus(201)
             ->assertJsonPath('data.descricao_problema', 'Troca de óleo')
-            ->assertJsonPath('data.status_atual.nome', 'Recebida');
+            ->assertJsonPath('data.status_atual.nome', 'Recebida')
+            ->assertJsonPath('data.filial', 'MATRIZ');
+    }
+
+    public function test_criar_os_em_filial_informada(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Troca de óleo',
+            'filial' => 'sp-centro',
+        ], $this->headers())
+            ->assertStatus(201)
+            ->assertJsonPath('data.filial', 'SP-CENTRO');
+    }
+
+    public function test_criar_os_com_filial_invalida_retorna_422(): void
+    {
+        $this->postJson('/api/os', [
+            'veiculo_id' => $this->veiculo->id,
+            'cliente_id' => $this->cliente->id,
+            'descricao_problema' => 'Troca de óleo',
+            'filial' => 'filial com espaço',
+        ], $this->headers())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('filial');
     }
 
     public function test_criar_os_sem_campos_obrigatorios_retorna_422(): void

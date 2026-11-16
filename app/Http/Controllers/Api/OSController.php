@@ -18,6 +18,7 @@ use Application\OS\UseCases\DetalharOS;
 use Application\OS\UseCases\GerarOrcamento;
 use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
+use Domain\Atendimento\Entities\OS;
 use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Atendimento\Filters\FiltroListagemOS;
 use Illuminate\Http\JsonResponse;
@@ -61,6 +62,7 @@ class OSController extends Controller
             clienteId: (int) $request->cliente_id,
             descricaoProblema: $request->descricao_problema,
             servicos: $request->input('servicos', []),
+            filial: $request->input('filial', OS::FILIAL_PADRAO),
         );
 
         // Alimenta o painel "Volume diário de ordens de serviço" no New Relic.
