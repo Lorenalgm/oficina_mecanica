@@ -183,7 +183,7 @@ class OSTest extends TestCase
             ->assertJsonPath('data.quantidade', 2);
     }
 
-    public function test_gerar_orcamento(): void
+    public function test_solicitar_orcamento_inicia_a_saga(): void
     {
         $os = $this->criarOS();
         $osServico = OSServico::create(['os_id' => $os->id, 'servico_id' => $this->servico->id]);
@@ -194,9 +194,8 @@ class OSTest extends TestCase
         ]);
 
         $this->postJson("/api/os/{$os->id}/orcamento", [], $this->headers())
-            ->assertStatus(201)
-            ->assertJsonPath('data.status', 'pendente')
-            ->assertJson(['data' => ['valor_total' => 200]]);
+            ->assertStatus(202)
+            ->assertJsonPath('data.estado', 'aguardando_orcamento');
     }
 
     public function test_aprovar_orcamento_reduz_estoque(): void

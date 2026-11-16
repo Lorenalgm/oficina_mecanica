@@ -15,10 +15,12 @@ use Application\OS\UseCases\CalcularTempoMedio;
 use Application\OS\UseCases\ConsultarOSPublica;
 use Application\OS\UseCases\CriarOS;
 use Application\OS\UseCases\DetalharOS;
-use Application\OS\UseCases\GerarOrcamento;
 use Application\OS\UseCases\ListarOS;
 use Application\OS\UseCases\RecusarOrcamento;
+use Application\Saga\UseCases\IniciarSagaOS;
+use App\Support\CorrelationContext;
 use Domain\Atendimento\Entities\OS;
+use Domain\Atendimento\Saga\SagaJaAtiva;
 use Domain\Atendimento\Exceptions\TokenAprovacaoInvalido;
 use Domain\Atendimento\Filters\FiltroListagemOS;
 use Illuminate\Http\JsonResponse;
@@ -34,7 +36,7 @@ class OSController extends Controller
         private DetalharOS $detalharOS,
         private AdicionarServicoNaOS $adicionarServico,
         private AdicionarInsumoNoServico $adicionarInsumo,
-        private GerarOrcamento $gerarOrcamento,
+        private IniciarSagaOS $iniciarSaga,
         private AprovarOrcamento $aprovarOrcamento,
         private RecusarOrcamento $recusarOrcamento,
         private AlterarStatusOS $alterarStatus,
@@ -125,22 +127,22 @@ class OSController extends Controller
         }
     }
 
-    public function gerarOrcamento(int $id): JsonResponse
+    public function solicitarOrcamento(int $id): JsonResponse
     {
         try {
-            $orcamento = $this->gerarOrcamento->executar($id);
-
-            return response()->json(['data' => [
-                'id' => $orcamento->getId(),
-                'os_id' => $orcamento->getOsId(),
-                'valor_total' => $orcamento->getValorTotal(),
-                'status' => $orcamento->getStatus()->value,
-                'data_orcamento' => $orcamento->getDataOrcamento(),
-                'approval_token' => $orcamento->getApprovalToken(),
-            ]], 201);
+            $saga = $this->iniciarSaga->executar($id, CorrelationContext::getOrGenerate());
+        } catch (SagaJaAtiva $e) {
+            return response()->json(['message' => $e->getMessage(), 'saga_id' => $e->saga->id], 409);
         } catch (\RuntimeException $e) {
             return $this->falhaNoProcessamento($e, $id);
         }
+
+        return response()->json(['data' => [
+            'saga_id' => $saga->id,
+            'os_id' => $saga->osId,
+            'estado' => $saga->estado()->value,
+            'acompanhar' => "/api/os/{$id}/saga",
+        ]], 202);
     }
 
     public function aprovarOrcamento(Request $request, int $id): JsonResponse

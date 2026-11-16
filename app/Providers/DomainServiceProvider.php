@@ -9,7 +9,9 @@ use Domain\Identidade\Repositories\VeiculoRepository;
 use Domain\Atendimento\Repositories\OSRepository;
 use Domain\Atendimento\Saga\SagaRepository;
 use Domain\Shared\Events\DomainEventDispatcher;
+use Domain\Shared\Transacao;
 use Infrastructure\Events\LaravelEventDispatcher;
+use Infrastructure\Persistence\LaravelTransacao;
 use Infrastructure\Persistence\Eloquent\EloquentInsumoRepository;
 use Infrastructure\Persistence\Eloquent\EloquentServicoRepository;
 use Infrastructure\Persistence\Eloquent\EloquentClienteRepository;
@@ -29,5 +31,6 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->bind(OSRepository::class, EloquentOSRepository::class);
         $this->app->bind(SagaRepository::class, EloquentSagaRepository::class);
         $this->app->bind(DomainEventDispatcher::class, LaravelEventDispatcher::class);
+        $this->app->bind(Transacao::class, LaravelTransacao::class);
     }
 }
