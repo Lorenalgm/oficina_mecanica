@@ -63,6 +63,9 @@ jobs:
       - name: Run tests
         run: php artisan test
 
+      - name: BDD da Saga (Behat)
+        run: vendor/bin/behat --format=progress --no-colors
+
   imagem:
     name: Imagem de produção (GHCR)
     runs-on: ubuntu-latest
