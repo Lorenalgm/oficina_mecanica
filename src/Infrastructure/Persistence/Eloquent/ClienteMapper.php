@@ -16,6 +16,7 @@ class ClienteMapper
             documento: new Documento($model->documento),
             celular: $model->celular,
             email: $model->email,
+            ativo: (bool) ($model->ativo ?? true),
         );
     }
 

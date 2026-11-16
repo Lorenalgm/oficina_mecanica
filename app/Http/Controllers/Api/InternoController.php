@@ -22,6 +22,6 @@ class InternoController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json(['data' => ['id' => $cliente->getId(), 'nome' => $cliente->getNome()]]);
+        return response()->json(['data' => ['id' => $cliente->getId(), 'nome' => $cliente->getNome(), 'ativo' => $cliente->isAtivo()]]);
     }
 }
