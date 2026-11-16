@@ -79,14 +79,16 @@ class OSFase2Test extends TestCase
         $this->criarOSComStatus('Recebida');
         $this->criarOSComStatus('Em diagnóstico');
         $this->criarOSComStatus('Aguardando aprovação');
+        $this->criarOSComStatus('Aguardando pagamento');
         $this->criarOSComStatus('Em execução');
+        $this->criarOSComStatus('Cancelada');
 
         $resposta = $this->getJson('/api/os', $this->headers())->assertStatus(200);
 
         $nomes = array_map(fn ($os) => $os['status_atual']['nome'], $resposta->json('data'));
 
         $this->assertSame(
-            ['Em execução', 'Aguardando aprovação', 'Em diagnóstico', 'Recebida'],
+            ['Em execução', 'Aguardando pagamento', 'Aguardando aprovação', 'Em diagnóstico', 'Recebida'],
             $nomes,
         );
     }
