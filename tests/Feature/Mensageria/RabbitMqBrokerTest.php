@@ -140,6 +140,18 @@ class RabbitMqBrokerTest extends TestCase
         $this->assertSame(['x-saga-id' => 'saga-1'], $mensagem->get('application_headers')->getNativeData());
     }
 
+    public function test_reconecta_quando_a_conexao_cai(): void
+    {
+        $this->broker->publicar($this->exchange, 'billing.cmd.cobrar', '{"n":1}');
+        $conexao = (new \ReflectionProperty($this->broker, 'conexao'))->getValue($this->broker);
+        $conexao->close();
+
+        $this->broker->publicar($this->exchange, 'billing.cmd.cobrar', '{"n":2}');
+
+        $this->assertSame('{"n":1}', $this->retirar($this->fila)?->getBody());
+        $this->assertSame('{"n":2}', $this->retirar($this->fila)?->getBody());
+    }
+
     public function test_mensagem_sem_rota_falha_em_vez_de_sumir(): void
     {
         $this->expectException(FalhaAoPublicar::class);
