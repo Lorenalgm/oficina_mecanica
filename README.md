@@ -215,7 +215,8 @@ curl "$API/api/os" -H "Authorization: Bearer $TOKEN"
 O cliente se identifica **só pelo CPF**, sem senha:
 
 1. `POST /auth` chega à **Lambda `authenticate`**, que confere os dígitos do CPF,
-   busca o cliente no banco e devolve um **token JWT** válido por 1 hora.
+   busca o cliente no OS Service (`GET /internal/clientes/por-documento/{doc}`,
+   com `X-Internal-Token`) e devolve um **token JWT** válido por 1 hora.
 2. Nas rotas `/api/*`, a **Lambda `authorizer`** confere o token antes de a
    chamada chegar ao cluster.
 3. A API confere o token de novo (middleware `ValidarJwt`), porque o cluster
@@ -421,15 +422,14 @@ Contrato completo no [Swagger](https://editor.swagger.io/?url=https://raw.github
 | PATCH | `/api/os/{id}/status` | 🔒 | Mudar status (envia e-mail ao cliente) |
 | POST | `/api/os/{id}/servicos` | 🔒 | Adicionar serviço |
 | POST | `/api/os/{id}/servicos/{osServicoId}/insumos` | 🔒 | Adicionar peça ao serviço |
-| POST | `/api/os/{id}/orcamento` | 🔒 | Gerar orçamento (OS vai para *Aguardando aprovação*) |
+| POST | `/api/os/{id}/orcamento` | 🔒 | Inicia a Saga da OS (**202** com `saga_id`; **409** se já houver Saga ativa) |
+| GET | `/api/os/{id}/saga` | 🔒 | Estado e passos da Saga |
 | GET | `/api/os/tempo-medio` | 🔒 | Tempo médio de execução, em minutos |
-| POST | `/api/os/{id}/orcamento/aprovar` | token do orçamento | Aprovar: baixa o estoque e inicia a execução |
-| POST | `/api/os/{id}/orcamento/recusar` | token do orçamento | Recusar o orçamento |
 | GET | `/api/consulta-publica` | | Status da OS pelo documento + placa |
 
-**Listagem de OS:** ordem *Em execução* → *Aguardando aprovação* →
-*Em diagnóstico* → *Recebida*; dentro do mesmo status, as mais antigas primeiro.
-OS *Finalizadas* e *Entregues* não aparecem. Filtros: `cliente_id`,
+**Listagem de OS:** ordem *Em execução* → *Aguardando pagamento* →
+*Aguardando aprovação* → *Em diagnóstico* → *Recebida*; dentro do mesmo status,
+as mais antigas primeiro. OS *Finalizadas*, *Entregues* e *Canceladas* não aparecem. Filtros: `cliente_id`,
 `veiculo_id`, `status_id`.
 
 **Exemplo de abertura:**
@@ -446,5 +446,6 @@ OS *Finalizadas* e *Entregues* não aparecem. Filtros: `cliente_id`,
 }
 ```
 
-**Token do orçamento:** gerado junto com o orçamento, enviado na query string
-ou no corpo e válido para **um uso só**. Sem token válido, a resposta é **401**.
+**Aprovação do orçamento:** fica no Billing Service
+(`POST /api/orcamentos/{id}/aprovar` e `/recusar`), com um token de **uso único**
+enviado ao cliente por e-mail.
