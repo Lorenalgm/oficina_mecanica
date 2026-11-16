@@ -31,5 +31,6 @@ Route::middleware('jwt')->group(function () {
         Route::post('/{id}/servicos', [\App\Http\Controllers\Api\OSController::class, 'adicionarServico']);
         Route::post('/{id}/servicos/{osServicoId}/insumos', [\App\Http\Controllers\Api\OSController::class, 'adicionarInsumo']);
         Route::post('/{id}/orcamento', [\App\Http\Controllers\Api\OSController::class, 'solicitarOrcamento']);
+        Route::get('/{id}/saga', [\App\Http\Controllers\Api\SagaController::class, 'show']);
     });
 });
