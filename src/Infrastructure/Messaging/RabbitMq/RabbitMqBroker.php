@@ -27,6 +27,18 @@ class RabbitMqBroker implements Broker
 
     public function publicar(string $exchange, string $routingKey, string $corpo, array $cabecalhos = []): void
     {
+        try {
+            $this->enviar($exchange, $routingKey, $corpo, $cabecalhos);
+        } catch (FalhaAoPublicar $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->descartarConexao();
+            throw new FalhaAoPublicar($e->getMessage(), previous: $e);
+        }
+    }
+
+    private function enviar(string $exchange, string $routingKey, string $corpo, array $cabecalhos): void
+    {
         $canal = $this->canal();
         $this->recusada = false;
         $this->devolvida = false;
@@ -89,6 +101,16 @@ class RabbitMqBroker implements Broker
         $this->conexao = null;
     }
 
+    private function descartarConexao(): void
+    {
+        try {
+            $this->conexao?->close();
+        } catch (\Throwable) {
+        }
+        $this->canal = null;
+        $this->conexao = null;
+    }
+
     private function retentar(AMQPMessage $mensagem, string $fila, array $cabecalhos, int $tentativas): void
     {
         $cabecalhos['x-tentativas'] = $tentativas + 1;
@@ -102,9 +124,10 @@ class RabbitMqBroker implements Broker
 
     private function canal(): AMQPChannel
     {
-        if ($this->canal !== null) {
+        if ($this->canal !== null && $this->conexao?->isConnected()) {
             return $this->canal;
         }
+        $this->descartarConexao();
 
         $config = new AMQPConnectionConfig();
         $config->setHost($this->config['host']);
@@ -113,8 +136,9 @@ class RabbitMqBroker implements Broker
         $config->setPassword($this->config['password']);
         $config->setVhost($this->config['vhost']);
         $config->setHeartbeat($this->config['heartbeat']);
-        $config->setReadTimeout(max(3, $this->config['heartbeat'] * 2));
-        $config->setWriteTimeout(max(3, $this->config['heartbeat'] * 2));
+        $config->setKeepalive(true);
+        $config->setReadTimeout(10);
+        $config->setWriteTimeout(10);
 
         $this->conexao = AMQPConnectionFactory::create($config);
         $this->canal = $this->conexao->channel();

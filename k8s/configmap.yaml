@@ -36,3 +36,9 @@ data:
   MAIL_MAILER: "resend"
   MAIL_FROM_ADDRESS: "onboarding@resend.dev"
   MAIL_FROM_NAME: "Oficina Mecanica"
+
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: "oficina"
+  RABBITMQ_USER: "os"
+  MENSAGERIA_FILA: "os.saga.eventos"

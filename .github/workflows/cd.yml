@@ -171,8 +171,9 @@ jobs:
 
       - name: Rollout
         run: |
-          kubectl -n oficina rollout restart deployment/oficina-api
+          kubectl -n oficina rollout restart deployment/oficina-api deployment/oficina-worker
           kubectl -n oficina rollout status deployment/oficina-api --timeout=300s
+          kubectl -n oficina rollout status deployment/oficina-worker --timeout=300s
 
       - name: Smoke test (GET /up)
         run: |
