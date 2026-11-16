@@ -3,13 +3,15 @@
 API REST para gestão de uma oficina mecânica: clientes, veículos, serviços,
 peças e ordens de serviço (OS).
 
-**Tech Challenge 13SOAT — Fase 3.** A aplicação roda na AWS: autenticação por
-CPF em uma função serverless, API em Kubernetes (EKS), banco gerenciado (RDS) e
-monitoramento no New Relic.
+**Tech Challenge 13SOAT — Fase 4.** Este repositório é o **OS Service**, um dos
+3 microsserviços do sistema e orquestrador da Saga da OS. A aplicação roda na
+AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
+(EKS), mensageria com RabbitMQ e monitoramento no New Relic.
 
 ## Sumário
 
 - [Links](#links)
+- [Arquitetura da Fase 4](#arquitetura-da-fase-4)
 - [Arquitetura da Fase 3](#arquitetura-da-fase-3)
 - [Como testar](#como-testar)
 - [Autenticação por CPF](#autenticação-por-cpf)
@@ -26,12 +28,105 @@ monitoramento no New Relic.
 |---|---|
 | 🚪 API em produção (API Gateway) | https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com |
 | 📘 Swagger | [abrir no Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml) · arquivo [`openapi.yaml`](openapi.yaml) |
+| 💳 Billing Service | [oficina-billing-service](https://github.com/Lorenalgm/oficina-billing-service) |
+| 🔧 Execução Service | [oficina-execucao-service](https://github.com/Lorenalgm/oficina-execucao-service) |
 | 🔐 Repositório da autenticação | [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda) |
 | ☸️ Repositório do Kubernetes | [oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s) |
 | 🐘 Repositório do banco | [oficina-infra-db](https://github.com/Lorenalgm/oficina-infra-db) |
 
 > O ambiente roda no **AWS Academy Learner Lab**, que desliga os recursos ao fim
 > de cada sessão. Fora das sessões de demonstração, a URL pode estar fora do ar.
+
+## Arquitetura da Fase 4
+
+Na Fase 4 o sistema foi dividido em **3 microsserviços**, cada um com
+repositório, pipeline, banco e manifestos Kubernetes próprios. Entre eles, a
+comunicação é por mensagens no RabbitMQ; REST fica só nas bordas.
+
+```mermaid
+flowchart LR
+    user(["👤 Cliente / atendente"])
+
+    subgraph aws["☁️ AWS"]
+        direction LR
+        gw["🚪 API Gateway"]
+        auth["🪪 Lambda<br/>login por CPF"]
+        authz["🛡️ Lambda<br/>confere o token"]
+
+        subgraph eks["☸️ Kubernetes (EKS)"]
+            ing["Ingress"]
+            os["⚙️ OS Service<br/>orquestrador da Saga"]
+            billing["💳 Billing Service"]
+            exec["🔧 Execução Service"]
+            mq[["🐇 RabbitMQ<br/>exchange oficina"]]
+            pgb[("🐘 PostgreSQL<br/>Billing")]
+            mongo[("🍃 MongoDB<br/>Execução")]
+        end
+
+        pgos[("🐘 PostgreSQL OS<br/>RDS")]
+    end
+
+    nr["📊 New Relic"]
+
+    user --> gw
+    gw --> auth
+    gw -.->|valida| authz
+    auth -->|"GET /internal/clientes/por-documento<br/>X-Internal-Token"| ing
+    gw --> ing
+    ing --> os & billing & exec
+    os --> pgos
+    billing --> pgb
+    exec --> mongo
+    os <-->|comandos e eventos| mq
+    billing <--> mq
+    exec <--> mq
+    eks -.->|logs| nr
+
+    style aws fill:#f8fafc,stroke:#64748b,color:#0f172a
+    style eks fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
+```
+
+| Serviço | Repositório | Responsabilidade | Banco |
+|---|---|---|---|
+| OS Service | [oficina_mecanica](https://github.com/Lorenalgm/oficina_mecanica) (este) | Clientes, veículos, serviços, insumos e estoque; OS e histórico; consulta pública; orquestração da Saga | PostgreSQL (RDS) |
+| Billing Service | [oficina-billing-service](https://github.com/Lorenalgm/oficina-billing-service) | Orçamento com token de aprovação, cobrança e estorno (Mercado Pago simulado) | PostgreSQL (StatefulSet no cluster) |
+| Execução Service | [oficina-execucao-service](https://github.com/Lorenalgm/oficina-execucao-service) | Fila por filial com capacidade, etapas da execução e linha do tempo | MongoDB |
+
+Repositórios de apoio: [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda)
+(API Gateway e Lambdas), [oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s)
+(cluster, RabbitMQ e MongoDB) e [oficina-infra-db](https://github.com/Lorenalgm/oficina-infra-db)
+(rede, RDS e Secrets Manager).
+
+- **Nenhum serviço acessa o banco de outro.** As mensagens levam um snapshot do
+  que o destino precisa, e a Lambda consulta o cliente pela rota interna do OS.
+- **Mensageria:** exchange `topic` `oficina` e filas `billing.comandos`,
+  `execucao.comandos` e `os.saga.eventos`, com retentativa (`oficina.retry`,
+  5 s) e DLQ (`oficina.dlx`). Todos os serviços usam outbox transacional,
+  consumidor idempotente e *publisher confirms* ([ADR-007](docs/adrs/ADR-007-rabbitmq-outbox-consumidor-idempotente.md)).
+- **Rastreamento:** `correlation_id` e `saga_id` vão em toda mensagem e em todo
+  log dos três serviços, e aparecem no New Relic.
+
+### Estratégia da Saga
+
+A transação da OS passa pelos três serviços: gerar orçamento → aprovação do
+cliente → baixa de estoque → pagamento → entrada na fila de execução. Usamos
+uma **Saga orquestrada**, com o orquestrador dentro do OS Service.
+
+Por que orquestrada e não coreografada:
+
+- O fluxo e a ordem das compensações ficam em um lugar só (`SagaOS`), e não
+  espalhados pelas assinaturas de eventos de cada serviço.
+- A Saga guarda o que já foi feito e desfaz em ordem reversa: estorno, devolução
+  de estoque, cancelamento do orçamento e cancelamento da OS.
+- Billing e Execução só respondem a comandos e não se conhecem.
+- Em que ponto cada OS está aparece em `GET /api/os/{id}/saga`, e uma
+  compensação que esgota as tentativas deixa a Saga em `compensacao_falhou`
+  para ação manual.
+
+Máquina de estados, diagramas de sequência e tabela de falhas:
+[saga.md](docs/arquitetura/saga.md). Decisões: [ADR-005](docs/adrs/ADR-005-divisao-em-tres-microsservicos.md)
+a [ADR-010](docs/adrs/ADR-010-banco-do-billing-no-cluster.md). O fluxo completo
+tem teste BDD em [`features/saga_os.feature`](features/saga_os.feature).
 
 ## Arquitetura da Fase 3
 
