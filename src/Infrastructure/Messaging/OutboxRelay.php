@@ -59,4 +59,9 @@ class OutboxRelay
             return $publicadas;
         });
     }
+
+    public function reenfileirar(string $messageId): bool
+    {
+        return DB::table('outbox')->where('message_id', $messageId)->update(['publicado_em' => null]) > 0;
+    }
 }
