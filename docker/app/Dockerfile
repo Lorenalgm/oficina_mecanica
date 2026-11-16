@@ -20,6 +20,7 @@ RUN composer install \
       --no-interaction \
       --no-progress \
       --no-scripts \
+      --ignore-platform-req=ext-sockets \
     && rm -rf tests
 
 ########################################
@@ -34,6 +35,8 @@ RUN install-php-extensions \
       zip \
       mbstring \
       bcmath \
+      sockets \
+      pcntl \
       intl \
       opcache
 
