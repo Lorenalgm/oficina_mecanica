@@ -113,12 +113,13 @@ Cada etapa vira um ou mais PRs na `main` do repositório indicado, com CI verde.
 - [ ] README com o diagrama atualizado
 
 ### 3. OS Service — mensageria
-- [ ] `php-amqplib`, `config/mensageria.php`, variáveis `RABBITMQ_*`
-- [ ] Porta `MessagePublisher` e value object `Envelope`
-- [ ] Tabelas `outbox` e `mensagens_processadas`; `OutboxPublisher`
-- [ ] `php artisan outbox:publicar` (loop, `FOR UPDATE SKIP LOCKED`, confirms)
-- [ ] `php artisan mensageria:consumir` (roteamento por `type`, idempotência, retry, DLQ, `correlation_id`)
-- [ ] Broker fake em memória para os testes
+- [x] `php-amqplib`, `config/mensageria.php`, variáveis `RABBITMQ_*`
+- [x] Portas `MessagePublisher` e `MessageHandler`, value object `Envelope`
+- [x] Tabelas `outbox` e `mensagens_processadas`; `OutboxPublisher`
+- [x] `php artisan outbox:publicar --loop` (`FOR UPDATE SKIP LOCKED`, publisher confirms, mensagem sem rota falha)
+- [x] `php artisan mensageria:consumir` (roteamento por `type`, idempotência, retry, DLQ, `correlation_id`)
+- [x] Broker fake em memória para os testes; integração com RabbitMQ real no CI
+- [x] `pcntl` na imagem para os workers pararem no SIGTERM
 
 ### 4. OS Service — Saga
 - [ ] Status *Aguardando pagamento* e *Cancelada*; `PrioridadeStatus` atualizado
