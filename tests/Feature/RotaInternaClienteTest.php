@@ -33,8 +33,15 @@ class RotaInternaClienteTest extends TestCase
 
         $this->buscar('529.982.247-25')
             ->assertOk()
-            ->assertExactJson(['data' => ['id' => $cliente->id, 'nome' => 'Ana Souza']])
+            ->assertExactJson(['data' => ['id' => $cliente->id, 'nome' => 'Ana Souza', 'ativo' => true]])
             ->assertHeader('X-Request-Id');
+    }
+
+    public function test_informa_cliente_inativo_para_a_lambda_recusar(): void
+    {
+        Cliente::factory()->create(['documento' => '52998224725', 'ativo' => false]);
+
+        $this->buscar('52998224725')->assertOk()->assertJsonPath('data.ativo', false);
     }
 
     public function test_cliente_inexistente_retorna_404(): void

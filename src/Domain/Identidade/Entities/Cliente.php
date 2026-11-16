@@ -12,6 +12,7 @@ class Cliente
         private Documento $documento,
         private ?string $celular,
         private ?string $email,
+        private bool $ativo = true,
     ) {}
 
     public function getId(): ?int { return $this->id; }
@@ -19,6 +20,7 @@ class Cliente
     public function getDocumento(): Documento { return $this->documento; }
     public function getCelular(): ?string { return $this->celular; }
     public function getEmail(): ?string { return $this->email; }
+    public function isAtivo(): bool { return $this->ativo; }
 
     public function atualizar(string $nome, ?string $celular, ?string $email): void
     {
