@@ -239,6 +239,8 @@ Diagramas passo a passo: [sequencia-auth.md](docs/arquitetura/sequencia-auth.md)
 | [Componentes](docs/arquitetura/componentes.md) | Visão geral da AWS e quem faz o quê |
 | [Autenticação](docs/arquitetura/sequencia-auth.md) | Login por CPF e uso do token |
 | [Abertura de OS](docs/arquitetura/sequencia-abertura-os.md) | Fluxo da requisição e ciclo de vida da OS |
+| [Saga da OS](docs/arquitetura/saga.md) | Máquina de estados, sequências e compensações |
+| [Contrato de mensagens](docs/fase4/contrato-mensagens.md) | Filas, envelope e mensagens entre os serviços |
 | [Modelo de dados](docs/arquitetura/modelo-de-dados.md) | Diagrama ER e relacionamentos |
 | [RFC-001](docs/rfcs/RFC-001-escolha-da-nuvem.md) | Escolha da nuvem |
 | [RFC-002](docs/rfcs/RFC-002-banco-de-dados.md) | Escolha do banco de dados |
@@ -247,6 +249,12 @@ Diagramas passo a passo: [sequencia-auth.md](docs/arquitetura/sequencia-auth.md)
 | [ADR-002](docs/adrs/ADR-002-uso-de-hpa.md) | Escalabilidade automática (HPA) |
 | [ADR-003](docs/adrs/ADR-003-observabilidade-via-logs-estruturados.md) | Monitoramento por logs estruturados |
 | [ADR-004](docs/adrs/ADR-004-labrole-no-aws-academy.md) | Permissões no AWS Academy |
+| [ADR-005](docs/adrs/ADR-005-divisao-em-tres-microsservicos.md) | Divisão em três microsserviços |
+| [ADR-006](docs/adrs/ADR-006-saga-orquestrada.md) | Saga orquestrada |
+| [ADR-007](docs/adrs/ADR-007-rabbitmq-outbox-consumidor-idempotente.md) | RabbitMQ, outbox e consumidor idempotente |
+| [ADR-008](docs/adrs/ADR-008-mongodb-no-execucao.md) | MongoDB no Execução Service |
+| [ADR-009](docs/adrs/ADR-009-mercado-pago-mock.md) | Mercado Pago simulado |
+| [ADR-010](docs/adrs/ADR-010-banco-do-billing-no-cluster.md) | Banco do Billing no cluster |
 | [Consultas NRQL](docs/observabilidade/nrql.md) | Consultas dos painéis do New Relic |
 
 ## Stack
