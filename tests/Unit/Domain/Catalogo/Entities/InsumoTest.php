@@ -50,4 +50,21 @@ class InsumoTest extends TestCase
         $insumo = $this->criarInsumo(10);
         $insumo->darBaixa(-1);
     }
+
+    public function test_devolver_repoe_o_estoque(): void
+    {
+        $insumo = $this->criarInsumo(10);
+        $insumo->darBaixa(4);
+
+        $insumo->devolver(4);
+
+        $this->assertEquals(10, $insumo->getQuantidadeEstoque());
+    }
+
+    public function test_devolver_quantidade_negativa_lanca_excecao(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->criarInsumo()->devolver(-1);
+    }
 }
