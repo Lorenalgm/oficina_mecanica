@@ -7,7 +7,7 @@ return [
         'vhost' => env('RABBITMQ_VHOST', 'oficina'),
         'user' => env('RABBITMQ_USER', 'os'),
         'password' => env('RABBITMQ_PASSWORD', ''),
-        'heartbeat' => (int) env('RABBITMQ_HEARTBEAT', 30),
+        'heartbeat' => (int) env('RABBITMQ_HEARTBEAT', 0),
         'timeout_confirmacao' => (int) env('RABBITMQ_TIMEOUT_CONFIRMACAO', 5),
         'prefetch' => (int) env('RABBITMQ_PREFETCH', 10),
     ],
