@@ -221,6 +221,140 @@ WHERE clusterName = 'oficina-eks' AND containerName = 'app'
 
 ---
 
+## Saga da OS (Fase 4)
+
+Consultas sobre os logs da Saga e da mensageria. Os três serviços seguem o
+mesmo formato de log, então os campos ficam em `context.*` e `extra.*` como
+nas seções acima. Aqui o filtro é `extra.service`, que separa os serviços pelo
+`APP_NAME`: `oficina-api`, `oficina-billing-service` e `oficina-execucao-service`.
+
+### Eventos da Saga e da mensageria
+
+| `event_type` | Onde nasce | Campos próprios |
+|---|---|---|
+| `saga.transicao` | `OrquestradorSagaOS` (OS) | `saga_id`, `os_id`, `message_type`, `estado_anterior`, `estado`, `motivo_falha` |
+| `saga.compensacao_falhou` | `OrquestradorSagaOS` (OS) | `saga_id`, `os_id`, `compensacao`, `motivo` |
+| `saga.evento_fora_de_ordem` | `OrquestradorSagaOS` (OS) | `saga_id`, `os_id`, `message_type`, `estado`, `erro` |
+| `saga.desconhecida` | `OrquestradorSagaOS` (OS) | `saga_id`, `os_id`, `message_type` |
+| `mensageria.processada` | `ProcessadorDeMensagens` (todos) | `message_id`, `message_type`, `saga_id`, `os_id` |
+| `mensageria.retentativa` | `ProcessadorDeMensagens` (todos) | os de `processada` + `tentativa`, `max_tentativas`, `exception_class`, `erro` |
+| `mensageria.enviada_dlq` | `ProcessadorDeMensagens` (todos) | os mesmos de `retentativa` |
+| `mensageria.mensagem_invalida` | `ProcessadorDeMensagens` (todos) | `erro` |
+| `mensageria.tipo_desconhecido` | `ProcessadorDeMensagens` (todos) | `message_id`, `message_type`, `saga_id`, `os_id` |
+| `mensageria.outbox_falhou` | `OutboxRelay` (todos) | `message_id`, `message_type`, `saga_id`, `erro` |
+
+Estados da Saga (`estado`): `aguardando_orcamento`, `aguardando_aprovacao`,
+`reservando_estoque`, `aguardando_pagamento`, `aguardando_execucao`, `concluida`,
+`compensando`, `compensada`, `compensacao_falhou`.
+
+### 10. Sagas por estado final, por dia
+
+```sql
+SELECT uniqueCount(`context.saga_id`)
+FROM Log
+WHERE `extra.service` = 'oficina-api' AND `context.event_type` = 'saga.transicao'
+  AND `context.estado` IN ('concluida', 'compensada', 'compensacao_falhou')
+FACET `context.estado`
+TIMESERIES 1 day SINCE 7 days ago
+```
+
+### 11. Taxa de compensação
+
+```sql
+SELECT percentage(uniqueCount(`context.saga_id`), WHERE `context.estado` IN ('compensada', 'compensacao_falhou')) AS 'compensadas %'
+FROM Log
+WHERE `extra.service` = 'oficina-api' AND `context.event_type` = 'saga.transicao'
+  AND `context.estado` IN ('concluida', 'compensada', 'compensacao_falhou')
+SINCE 1 day ago
+```
+
+### 12. Linha do tempo de uma Saga
+
+```sql
+SELECT timestamp, `context.message_type`, `context.estado_anterior`,
+       `context.estado`, `context.motivo_falha`
+FROM Log
+WHERE `extra.service` = 'oficina-api' AND `context.event_type` = 'saga.transicao'
+  AND `context.saga_id` = '<saga_id>'
+ORDER BY timestamp ASC
+LIMIT 100
+```
+
+### 13. Um fluxo atravessando os três serviços
+
+O `correlation_id` viaja no envelope da mensagem, então o mesmo valor aparece
+nos logs da OS, do Billing e da Execução:
+
+```sql
+SELECT timestamp, `extra.service`, `context.event_type`, `context.message_type`,
+       `context.saga_id`, `context.estado`, `context.erro`
+FROM Log
+WHERE `extra.correlation_id` = '<correlation_id>'
+ORDER BY timestamp ASC
+LIMIT 200
+```
+
+### 14. Mensagens enviadas à DLQ por serviço
+
+```sql
+SELECT count(*)
+FROM Log
+WHERE `context.event_type` IN ('mensageria.enviada_dlq', 'mensageria.mensagem_invalida', 'mensageria.tipo_desconhecido')
+FACET `extra.service`, `context.event_type`
+TIMESERIES SINCE 1 day ago
+```
+
+### 15. Retentativas por tipo de mensagem
+
+```sql
+SELECT count(*)
+FROM Log
+WHERE `context.event_type` = 'mensageria.retentativa'
+FACET `extra.service`, `context.message_type`
+TIMESERIES SINCE 6 hours ago
+```
+
+### 16. Compensações que falharam
+
+```sql
+SELECT timestamp, `context.saga_id`, `context.os_id`, `context.compensacao`, `context.motivo`
+FROM Log
+WHERE `extra.service` = 'oficina-api' AND `context.event_type` = 'saga.compensacao_falhou'
+SINCE 7 days ago
+LIMIT 100
+```
+
+### Alertas da Saga
+
+Entram na política "Oficina — Crítico".
+
+#### E. Compensação da Saga falhou
+
+```sql
+SELECT count(*)
+FROM Log
+WHERE `extra.service` = 'oficina-api' AND `context.event_type` = 'saga.compensacao_falhou'
+```
+
+- Tipo: NRQL, janela de 5 minutos
+- Crítico: acima de `0` em 5 minutos
+- Sinal perdido: não abrir incidente
+
+#### F. Mensagem enviada à DLQ
+
+```sql
+SELECT count(*)
+FROM Log
+WHERE `context.event_type` IN ('mensageria.enviada_dlq', 'mensageria.mensagem_invalida', 'mensageria.tipo_desconhecido')
+FACET `extra.service`
+```
+
+- Tipo: NRQL, janela de 5 minutos
+- Crítico: acima de `0` em 5 minutos
+- Sinal perdido: não abrir incidente
+
+---
+
 ## Como validar
 
 Com a aplicação rodando (kind ou EKS):
