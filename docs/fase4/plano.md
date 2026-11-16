@@ -43,7 +43,7 @@ Começa quando a OS já tem serviços e alguém pede o orçamento
 |---|---|---|---|---|
 | 1 | Solicitar orçamento | OS (local) | — | OS → *Cancelada* |
 | 2 | Gerar orçamento | Billing | `gerar-orcamento` → `orcamento-gerado` \| `orcamento-falhou` | `cancelar-orcamento` |
-| 3 | Aprovação do cliente | Billing (rota pública com token) | → `orcamento-aprovado` \| `orcamento-recusado` | — |
+| 3 | Aprovação do cliente | Billing (rota pública com token) | → `orcamento-aprovado` \| `orcamento-recusado` | — (a recusa só cancela a OS) |
 | 4 | Baixa de estoque | OS (local) | — | Devolver estoque |
 | 5 | Pagamento | Billing + Mercado Pago | `cobrar` → `cobranca-criada`, depois `pagamento-confirmado` \| `pagamento-recusado` | `estornar` → `pagamento-estornado` |
 | 6 | Enfileirar execução | Execução | `enfileirar` → `enfileirada` \| `rejeitada` | `cancelar` |
@@ -57,7 +57,7 @@ oficina, não há o que compensar). *Entregue* continua manual.
 | Falha | Como provocar na demo | Compensações |
 |---|---|---|
 | Orçamento falhou | Serviço inativo ou item com valor zero | 1 |
-| Cliente recusou | `POST /api/orcamentos/{id}/recusar` | 2, 1 |
+| Cliente recusou | `POST /api/orcamentos/{id}/recusar` | 1 (o orçamento já fica encerrado no Billing) |
 | Estoque insuficiente | Insumo com estoque menor que o pedido | 2, 1 |
 | Pagamento recusado | `FakeGateway` em modo recusa ou cartão de teste recusado no sandbox | 4, 2, 1 |
 | Fila cheia na filial | `EXECUCAO_CAPACIDADE_POR_FILIAL=1` e duas OS seguidas | 5, 4, 2, 1 |
@@ -72,7 +72,7 @@ com log `error` e alerta no New Relic para ação manual.
 |---|---|
 | `aguardando_orcamento` | Em diagnóstico |
 | `aguardando_aprovacao` | Aguardando aprovação |
-| `aguardando_pagamento` | **Aguardando pagamento** (novo) |
+| `reservando_estoque`, `aguardando_pagamento` | **Aguardando pagamento** (novo) |
 | `aguardando_execucao`, `concluida` | Em execução |
 | `compensando` | mantém o status atual |
 | `compensada` | **Cancelada** (novo) |
@@ -122,17 +122,18 @@ Cada etapa vira um ou mais PRs na `main` do repositório indicado, com CI verde.
 - [x] `pcntl` na imagem para os workers pararem no SIGTERM
 
 ### 4. OS Service — Saga
-- [ ] Status *Aguardando pagamento* e *Cancelada*; `PrioridadeStatus` atualizado
-- [ ] Campo `filial` na OS
-- [ ] Tabelas `sagas` e `saga_passos`; entidade `SagaOS` com a máquina de estados
-- [ ] `IniciarSagaOS` no `POST /api/os/{id}/orcamento` (202; 409 se já houver Saga ativa)
-- [ ] Handlers de todos os eventos do contrato
-- [ ] Compensações locais (devolver estoque, cancelar OS) e remotas (comandos)
-- [ ] `compensacao_falhou` e comando `saga:reenviar {saga_id}`
-- [ ] `GET /api/os/{id}/saga`
-- [ ] Remover `GerarOrcamento`, `AprovarOrcamento`, `RecusarOrcamento` e as rotas de aprovar/recusar
-- [ ] E-mail ao cliente com o link de aprovação e o link de pagamento
-- [ ] Testes de feature: caminho feliz e cada falha da tabela
+- [x] Status *Aguardando pagamento* e *Cancelada*; `PrioridadeStatus` atualizado
+- [x] Campo `filial` na OS
+- [x] Tabelas `sagas` e `saga_passos`; entidade `SagaOS` com a máquina de estados
+- [x] `IniciarSagaOS` no `POST /api/os/{id}/orcamento` (202; 409 se já houver Saga ativa)
+- [x] Orquestrador com os handlers de todos os eventos do contrato
+- [x] Compensações locais (devolver estoque, cancelar OS) e remotas (comandos)
+- [x] `compensacao_falhou` e comando `saga:reenviar {saga_id}`
+- [x] `GET /api/os/{id}/saga`
+- [x] Remover `GerarOrcamento`, `AprovarOrcamento`, `RecusarOrcamento` e as rotas de aprovar/recusar
+- [x] E-mail ao cliente com o link de aprovação e o link de pagamento
+- [x] Testes de feature: caminho feliz e cada falha da tabela
+- [ ] Remover a tabela `os_orcamentos` (depois do Billing no ar)
 
 ### 5. OS Service — BDD e rota interna
 - [ ] Behat com `features/saga_os.feature` em português (caminho feliz + `Esquema do Cenário` das falhas)
