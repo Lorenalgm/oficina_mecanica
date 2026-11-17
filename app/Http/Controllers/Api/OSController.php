@@ -162,6 +162,8 @@ class OSController extends Controller
             $os = $this->detalharOS->executar($id);
 
             return (new OSResource($os))->response();
+        } catch (SagaJaAtiva $e) {
+            return response()->json(['message' => $e->getMessage(), 'saga_id' => $e->saga->id], 409);
         } catch (\RuntimeException $e) {
             return $this->falhaNoProcessamento($e, $id);
         }

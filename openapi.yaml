@@ -769,6 +769,15 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/OS' }
+        409:
+          description: A OS tem uma Saga em andamento; o status é controlado pela Saga
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  saga_id: { type: string, format: uuid }
         422:
           description: Transição de status inválida
 
