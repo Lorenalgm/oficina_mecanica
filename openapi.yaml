@@ -25,7 +25,7 @@ tags:
   - name: Orçamento e Pagamento (Billing)
     description: Billing Service. Pelo API Gateway exige o JWT; o link enviado ao cliente vai direto ao load balancer e usa só o token do orçamento.
   - name: Execução
-    description: Execution Service. Fila de execução e etapas da OS.
+    description: Execução Service. Fila de execução e etapas da OS.
 
 components:
   securitySchemes:
