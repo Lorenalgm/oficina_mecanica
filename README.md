@@ -1,5 +1,8 @@
 # Oficina Mecânica API
 
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina_mecanica&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Lorenalgm_oficina_mecanica)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina_mecanica&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Lorenalgm_oficina_mecanica)
+
 API REST para gestão de uma oficina mecânica: clientes, veículos, serviços,
 peças e ordens de serviço (OS).
 
