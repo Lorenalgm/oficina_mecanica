@@ -231,8 +231,10 @@ O cliente se identifica **só pelo CPF**, sem senha:
 | **400** | CPF com dígitos inválidos |
 | **404** | CPF válido, mas cliente não cadastrado |
 
-Rotas **sem token**: `POST /auth`, `GET /api/consulta-publica` e a aprovação
-ou recusa de orçamento (protegidas por um token de uso único enviado ao cliente).
+Pelo API Gateway, só `POST /auth` dispensa o token. A consulta pública e a
+aprovação ou recusa de orçamento (protegida por um token de uso único enviado ao
+cliente) também funcionam sem JWT direto no load balancer, que é para onde
+aponta o link do e-mail.
 
 Diagramas passo a passo: [sequencia-auth.md](docs/arquitetura/sequencia-auth.md).
 
