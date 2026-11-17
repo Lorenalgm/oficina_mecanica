@@ -20,7 +20,7 @@ flowchart LR
         subgraph eks["☸️ Cluster Kubernetes (EKS)"]
             direction TB
             lb["🌐 Load Balancer + Ingress<br/>entrada do cluster"]
-            api["⚙️ oficina-api<br/>regras da oficina · 2 a 10 pods"]
+            api["⚙️ oficina-api<br/>regras da oficina · 1 a 10 pods"]
             agent["📡 Agente New Relic<br/>coleta logs e métricas"]
         end
 

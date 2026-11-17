@@ -155,7 +155,7 @@ flowchart LR
         authz["🛡️ Lambda<br/>confere o token"]
 
         subgraph eks["☸️ Kubernetes (EKS)"]
-            api["⚙️ oficina-api<br/>2 a 10 pods"]
+            api["⚙️ oficina-api<br/>1 a 10 pods"]
         end
 
         db[("🐘 PostgreSQL<br/>RDS")]
