@@ -798,7 +798,7 @@ paths:
               properties:
                 status_id:
                   type: integer
-                  description: "1=Recebida · 2=Em diagnóstico · 3=Aguardando aprovação · 4=Em execução · 5=Finalizada · 6=Entregue"
+                  description: "1=Recebida · 2=Em diagnóstico · 3=Aguardando aprovação · 4=Aguardando pagamento · 5=Em execução · 6=Finalizada · 7=Entregue · 8=Cancelada"
       responses:
         200:
           description: Status alterado
