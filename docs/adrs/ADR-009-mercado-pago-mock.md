@@ -19,8 +19,10 @@ O adaptador em uso é o `FakeGateway`, que simula o Mercado Pago. A rota
 `POST /api/pagamentos/{id}/simular` faz o papel do webhook: confirma ou recusa
 o pagamento e o Billing publica `pagamento-confirmado` ou `pagamento-recusado`.
 
-É uma decisão deliberada: o pagamento real não faz parte do que o desafio
-avalia, e o mock deixa o fluxo reproduzível.
+O enunciado prevê a integração com o Mercado Pago. Nesta entrega optamos, de
+forma consciente, por manter o mock: o foco da fase é a Saga, a mensageria e a
+compensação, e o mock deixa o fluxo reproduzível na demonstração. A troca pelo
+adaptador real está descrita abaixo e não afeta o resto do sistema.
 
 ## Justificativa
 
