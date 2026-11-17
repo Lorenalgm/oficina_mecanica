@@ -29,7 +29,7 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 
 | O quê | Link |
 |---|---|
-| 🚪 API em produção (API Gateway) | https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com |
+| 🚪 API em produção (API Gateway) | https://eme31yzdx6.execute-api.us-east-1.amazonaws.com |
 | 📘 Swagger | [abrir no Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml) · arquivo [`openapi.yaml`](openapi.yaml) |
 | 💳 Billing Service | [oficina-billing-service](https://github.com/Lorenalgm/oficina-billing-service) |
 | 🔧 Execução Service | [oficina-execucao-service](https://github.com/Lorenalgm/oficina-execucao-service) |
@@ -204,7 +204,7 @@ Pelo **Swagger** ([link](https://editor.swagger.io/?url=https://raw.githubuserco
 Ou pelo terminal:
 
 ```bash
-API=https://q7m1gn8vqi.execute-api.us-east-1.amazonaws.com
+API=https://eme31yzdx6.execute-api.us-east-1.amazonaws.com
 
 TOKEN=$(curl -s -X POST "$API/auth" \
   -H 'Content-Type: application/json' \
