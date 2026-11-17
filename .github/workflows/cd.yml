@@ -177,9 +177,7 @@ jobs:
 
       - name: Smoke test (GET /up)
         run: |
-          kubectl -n oficina run smoke --image=curlimages/curl:8.10.1 \
-            --restart=Never --rm -i --quiet --command -- \
-            curl -fsS http://oficina-api/up
+          kubectl -n oficina exec deploy/oficina-api -- curl -fsS http://localhost:8080/up
 
       - name: URL pública do ingress
         run: |

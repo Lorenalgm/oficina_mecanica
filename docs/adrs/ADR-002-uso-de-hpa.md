@@ -13,9 +13,13 @@ pagar ocioso — inaceitável sob o teto de USD 50 do Learner Lab.
 ## Decisão
 
 **HorizontalPodAutoscaler** (`autoscaling/v2`) sobre o Deployment da
-`oficina-api`, de **2 a 10 réplicas**, com dois gatilhos: **50% de CPU média** e
+`oficina-api`, de **1 a 10 réplicas**, com dois gatilhos: **50% de CPU média** e
 **70% de memória média**, alimentado pelo `metrics-server`. Abaixo dele, o
 managed node group do EKS varia de 2 a 4 nodes `t3.medium`.
+
+Na Fase 4 o mínimo caiu de 2 para 1: com três serviços, RabbitMQ, MongoDB e o
+New Relic no mesmo cluster, os 2 nodes `t3.medium` (17 pods cada) ficavam sem
+espaço para o rollout.
 
 ## Justificativa
 
