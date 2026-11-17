@@ -30,7 +30,7 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 | O quê | Link |
 |---|---|
 | 🚪 API em produção (API Gateway) | https://eme31yzdx6.execute-api.us-east-1.amazonaws.com |
-| 📘 Swagger | [abrir no Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml) · arquivo [`openapi.yaml`](openapi.yaml) |
+| 📘 Documentação da API (OS, Billing e Execução) | [readme.io](https://lorenalgm.readme.io/reference) · arquivo [`openapi.yaml`](openapi.yaml) |
 | 💳 Billing Service | [oficina-billing-service](https://github.com/Lorenalgm/oficina-billing-service) |
 | 🔧 Execução Service | [oficina-execucao-service](https://github.com/Lorenalgm/oficina-execucao-service) |
 | 🔐 Repositório da autenticação | [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda) |
@@ -194,12 +194,13 @@ Diagrama completo, com todos os componentes: [componentes.md](docs/arquitetura/c
 
 ## Como testar
 
-Pelo **Swagger** ([link](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml)):
+Pela **documentação no [readme.io](https://lorenalgm.readme.io/reference)**, que reúne as rotas dos três serviços:
 
-1. Em **Servers**, escolha *Produção (AWS API Gateway)*.
-2. Chame `POST /auth` com o CPF de um cliente cadastrado.
-3. Copie o `token` da resposta, clique em **Authorize** e cole.
-4. Chame as rotas protegidas, por exemplo `GET /api/os`.
+1. Chame `POST /auth` com o CPF de um cliente cadastrado.
+2. Copie o `token` da resposta e cole em **Authorization** (Bearer).
+3. Siga o fluxo da Saga: `POST /api/os` → `POST /api/os/{id}/orcamento` →
+   `GET /api/os/{id}/saga` (id e token do orçamento) → `POST /api/orcamentos/{id}/aprovar` →
+   `POST /api/pagamentos/{id}/simular` → `PATCH /api/execucoes/{osId}/status`.
 
 Ou pelo terminal:
 
@@ -395,7 +396,7 @@ flowchart LR
 
 ## Rotas da API
 
-Contrato completo no [Swagger](https://editor.swagger.io/?url=https://raw.githubusercontent.com/Lorenalgm/oficina_mecanica/main/openapi.yaml).
+Contrato completo no [readme.io](https://lorenalgm.readme.io/reference) (arquivo [`openapi.yaml`](openapi.yaml)).
 🔒 = exige token.
 
 ### Autenticação
