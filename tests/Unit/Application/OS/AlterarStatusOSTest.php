@@ -6,6 +6,7 @@ use Application\OS\UseCases\AlterarStatusOS;
 use Domain\Atendimento\Entities\OS;
 use Domain\Atendimento\Events\StatusOSAlterado;
 use Domain\Atendimento\Repositories\OSRepository;
+use Domain\Atendimento\Saga\SagaRepository;
 use Domain\Shared\Events\DomainEventDispatcher;
 use Mockery;
 use RuntimeException;
@@ -29,7 +30,7 @@ class AlterarStatusOSTest extends TestCase
                 && $evento->statusNovoId === 2
         ));
 
-        (new AlterarStatusOS($repo, $dispatcher))->executar(1, 2);
+        (new AlterarStatusOS($repo, $dispatcher, $this->semSagaAtiva()))->executar(1, 2);
 
         $this->assertSame(2, $os->getStatusAtualId());
     }
@@ -44,6 +45,14 @@ class AlterarStatusOSTest extends TestCase
         $dispatcher->shouldNotReceive('dispatch');
 
         $this->expectException(RuntimeException::class);
-        (new AlterarStatusOS($repo, $dispatcher))->executar(1, 999);
+        (new AlterarStatusOS($repo, $dispatcher, $this->semSagaAtiva()))->executar(1, 999);
+    }
+
+    private function semSagaAtiva(): SagaRepository
+    {
+        $sagas = Mockery::mock(SagaRepository::class);
+        $sagas->shouldReceive('buscarAtivaDaOS')->andReturn(null);
+
+        return $sagas;
     }
 }
