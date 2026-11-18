@@ -1,7 +1,8 @@
 # Autenticação por CPF
 
 O cliente troca o CPF por um **token (JWT)** válido por 1 hora e usa esse
-token nas demais chamadas.
+token nas demais chamadas. A Lambda não acessa o banco: consulta o cliente na
+rota interna do OS Service.
 
 ## 1. Login com CPF
 
@@ -12,13 +13,13 @@ sequenceDiagram
     participant GW as 🚪 API Gateway
     participant L as 🪪 Lambda authenticate
     participant SM as 🔑 Secrets Manager
-    participant DB as 🐘 Banco (RDS)
+    participant OS as ⚙️ OS Service (rota interna)
 
     C->>GW: POST /auth com o CPF
     GW->>L: repassa o pedido
 
     opt primeira chamada da Lambda
-        L->>SM: busca senha do banco e chave do token
+        L->>SM: busca a chave do token e o token interno
         SM-->>L: segredos (ficam guardados para as próximas chamadas)
     end
 
@@ -29,15 +30,15 @@ sequenceDiagram
             L-->>C: 400 · "CPF inválido"
         end
     else CPF válido
-        L->>DB: procura cliente com esse CPF
+        L->>OS: GET /internal/clientes/por-documento/{cpf}<br/>com X-Internal-Token
         alt cliente não existe
             rect rgb(254, 243, 199)
-                DB-->>L: nenhum resultado
+                OS-->>L: 404
                 L-->>C: 404 · "Cliente não encontrado"
             end
         else cliente encontrado
             rect rgb(220, 252, 231)
-                DB-->>L: id e nome do cliente
+                OS-->>L: id e nome do cliente
                 L->>L: gera o token (expira em 1h)
                 L-->>C: 200 · token
             end
@@ -53,7 +54,7 @@ sequenceDiagram
     actor C as 👤 Cliente
     participant GW as 🚪 API Gateway
     participant AZ as 🛡️ Lambda authorizer
-    participant API as ⚙️ oficina-api (EKS)
+    participant API as ⚙️ Serviço (EKS)
     participant DB as 🐘 Banco (RDS)
 
     C->>GW: GET /api/os com o token

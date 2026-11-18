@@ -1,11 +1,11 @@
 # Diagrama de componentes
 
-Visão geral da Fase 3 na AWS. Leia o **caminho da requisição pelos números
+Visão geral da Fase 4 na AWS. Leia o **caminho da requisição pelos números
 (1 → 4)**. As setas pontilhadas são apoio: segredos e monitoramento.
 
 ```mermaid
 flowchart LR
-    user(["👤 Cliente<br/>Postman / navegador"])
+    user(["👤 Cliente / atendente / mecânico"])
 
     subgraph aws["☁️ AWS — us-east-1"]
         direction LR
@@ -19,29 +19,39 @@ flowchart LR
 
         subgraph eks["☸️ Cluster Kubernetes (EKS)"]
             direction TB
-            lb["🌐 Load Balancer + Ingress<br/>entrada do cluster"]
-            api["⚙️ oficina-api<br/>regras da oficina · 1 a 10 pods"]
-            agent["📡 Agente New Relic<br/>coleta logs e métricas"]
+            lb["🌐 Load Balancer + Ingress<br/>roteia por caminho"]
+            os["⚙️ OS Service<br/>cadastros, estoque, OS · orquestra a Saga"]
+            billing["💳 Billing Service<br/>orçamento e pagamento"]
+            exec["🔧 Execução Service<br/>fila e etapas"]
+            mq[["🐇 RabbitMQ"]]
+            pgb[("🐘 PostgreSQL<br/>Billing")]
+            mongo[("🍃 MongoDB<br/>Execução")]
+            agent["📡 Agente New Relic"]
         end
 
-        db[("🐘 PostgreSQL (RDS)<br/>dados da oficina")]
-        sm["🔑 Secrets Manager<br/>senha do banco e chave do token"]
+        db[("🐘 PostgreSQL (RDS)<br/>OS Service")]
+        sm["🔑 Secrets Manager<br/>senha do banco e chaves"]
     end
 
     nr["📊 New Relic<br/>painéis e alertas"]
 
     user ==>|"1 · login com CPF"| gw
     gw ==> auth
-    auth -->|busca o cliente| db
+    auth -->|"rota interna do OS"| lb
     user ==>|"2 · chamada com token"| gw
     gw ==>|"3 · valida o token"| authz
     gw ==>|"4 · encaminha"| lb
-    lb ==> api
-    api -->|lê e grava| db
+    lb ==> os & billing & exec
+    os --> db
+    billing --> pgb
+    exec --> mongo
+    os <-->|comandos e eventos| mq
+    billing <--> mq
+    exec <--> mq
 
     auth -.-> sm
     authz -.-> sm
-    api -.->|logs| agent
+    eks -.->|logs| agent
     agent -.-> nr
 
     style aws fill:#f8fafc,stroke:#64748b,color:#0f172a
@@ -56,31 +66,39 @@ flowchart LR
     class user entry;
     class gw edge;
     class auth,authz,sm sec;
-    class lb,api app;
-    class db data;
+    class lb,os,billing,exec,mq app;
+    class db,pgb,mongo data;
     class agent,nr obs;
 ```
 
-**Legenda:** ⬜ cliente · 🟦 aplicação · 🟪 autenticação e segredos · 🟩 banco · 🟨 monitoramento
+**Legenda:** ⬜ usuários · 🟦 aplicação e mensageria · 🟪 autenticação e segredos · 🟩 bancos · 🟨 monitoramento
 
 ## Quem faz o quê
 
 | Componente | Função | Repositório |
 |---|---|---|
 | API Gateway | Entrada única; limita a taxa de chamadas | `oficina-auth-lambda` |
-| Lambda `authenticate` | Valida o CPF, busca o cliente e gera o token (JWT) | `oficina-auth-lambda` |
+| Lambda `authenticate` | Valida o CPF, consulta o cliente na rota interna do OS e gera o token (JWT) | `oficina-auth-lambda` |
 | Lambda `authorizer` | Bloqueia chamadas sem token válido antes de chegarem ao cluster | `oficina-auth-lambda` |
-| `oficina-api` | Regras da oficina; confere o token de novo | `oficina-api` |
-| EKS + Ingress | Roda a API e ajusta o número de pods | `oficina-infra-k8s` |
+| OS Service | Cadastros, estoque, OS e histórico; orquestra a Saga | `oficina_mecanica` |
+| Billing Service | Orçamento, aprovação, cobrança e estorno | `oficina-billing-service` |
+| Execução Service | Fila por filial e etapas da execução | `oficina-execucao-service` |
+| RabbitMQ | Comandos e eventos entre os serviços, com retentativa e DLQ | `oficina-infra-k8s` |
+| PostgreSQL do Billing | Banco exclusivo do Billing, dentro do cluster | `oficina-billing-service` |
+| MongoDB | Banco exclusivo da Execução | `oficina-infra-k8s` |
+| EKS + Ingress | Roda os serviços e ajusta o número de pods | `oficina-infra-k8s` |
 | Agente New Relic | Envia logs e métricas para os painéis | `oficina-infra-k8s` |
-| RDS PostgreSQL | Guarda os dados | `oficina-infra-db` |
-| Secrets Manager | Guarda a senha do banco e a chave do token | `oficina-infra-db` |
+| RDS PostgreSQL | Banco exclusivo do OS Service | `oficina-infra-db` |
+| Secrets Manager | Senha do banco, chave do token e token interno | `oficina-infra-db` |
+
+Nenhum serviço acessa o banco de outro: o que um serviço precisa do outro
+chega no payload das mensagens ([contrato](../fase4/contrato-mensagens.md)).
 
 ## Por que o token é conferido duas vezes
 
 1. **No Gateway**, para barrar chamadas inválidas antes de gastar recursos do
    cluster.
-2. **Na API**, porque o cluster também pode ser acessado sem passar pelo
+2. **Nos serviços**, porque o cluster também pode ser acessado sem passar pelo
    Gateway (por dentro da rede ou rodando local no kind).
 
 Detalhes no [ADR-001](../adrs/ADR-001-api-gateway-lambda-authorizer.md).

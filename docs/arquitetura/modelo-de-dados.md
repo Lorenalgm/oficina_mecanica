@@ -1,15 +1,18 @@
 # Modelo de dados
 
-Banco **PostgreSQL 16** (Amazon RDS). O diagrama foi montado a partir das
-migrations em [`database/migrations`](../../database/migrations).
+Banco **PostgreSQL 16** (Amazon RDS) do **OS Service**. O diagrama foi montado a
+partir das migrations em [`database/migrations`](../../database/migrations).
+Orçamento e pagamento ficam no banco do Billing; a execução, no MongoDB da
+Execução.
 
-São **10 tabelas de negócio**, em três grupos:
+São **11 tabelas de negócio**, em quatro grupos:
 
 | Grupo | Tabelas | O que guardam |
 |---|---|---|
 | 👤 Cadastro | `clientes`, `veiculos` | Quem é o cliente e quais carros ele tem |
 | 🔧 Catálogo | `servicos`, `insumos`, `status` | O que a oficina oferece e os estados possíveis de uma OS |
-| 🛠️ Atendimento | `os`, `os_servicos`, `os_servico_insumos`, `os_status`, `os_orcamentos` | A ordem de serviço e tudo o que acontece com ela |
+| 🛠️ Atendimento | `os`, `os_servicos`, `os_servico_insumos`, `os_status` | A ordem de serviço e tudo o que acontece com ela |
+| 🔁 Saga | `sagas`, `saga_passos` | Estado da Saga de cada OS e a linha do tempo dos passos |
 
 ```mermaid
 erDiagram
@@ -23,7 +26,8 @@ erDiagram
   insumos     ||--o{ os_servico_insumos : "é consumido em"
   os       ||--o{ os_status : "tem histórico em"
   status   ||--o{ os_status : "aparece em"
-  os       ||--o{ os_orcamentos : "recebe"
+  os       ||--o{ sagas : "é acompanhada por"
+  sagas    ||--o{ saga_passos : "registra"
 
   clientes {
     bigint id PK
@@ -61,6 +65,7 @@ erDiagram
     bigint cliente_id FK
     bigint status_atual_id FK
     text   descricao_problema
+    string filial "padrão MATRIZ"
   }
   os_servicos {
     bigint id PK
@@ -79,14 +84,24 @@ erDiagram
     bigint    status_id FK
     timestamp data_status
   }
-  os_orcamentos {
+  sagas {
+    uuid    id PK
+    bigint  os_id FK
+    string  correlation_id
+    string  estado
+    bigint  orcamento_id "id no Billing"
+    bigint  pagamento_id "id no Billing"
+    string  execucao_id "id na Execução"
+    boolean estoque_baixado
+    json    compensacoes_pendentes
+    string  motivo_falha "opcional"
+  }
+  saga_passos {
     bigint    id PK
-    bigint    os_id FK
-    decimal   valor_total "10,2"
-    timestamp data_orcamento
-    timestamp data_aprovacao "opcional"
-    string    status "pendente, aprovado, recusado"
-    string    approval_token UK "opcional"
+    uuid      saga_id FK
+    string    passo
+    json      detalhes
+    timestamp registrado_em
   }
 ```
 
@@ -107,7 +122,8 @@ erDiagram
 | `insumos` → `os_servico_insumos` | 1 : N | **bloqueia** | Não se apaga uma peça em uso |
 | `os` → `os_status` | 1 : N | apaga | Histórico da própria OS |
 | `status` → `os_status` | 1 : N | **bloqueia** | Tabela de referência |
-| `os` → `os_orcamentos` | 1 : N | apaga | Orçamento é da OS |
+| `os` → `sagas` | 1 : N | apaga | Uma OS pode ter nova Saga depois de uma compensada; só uma ativa por vez |
+| `sagas` → `saga_passos` | 1 : N | apaga | Linha do tempo da própria Saga |
 
 ## Pontos que merecem explicação
 
@@ -118,12 +134,12 @@ erDiagram
 - **Peças ficam ligadas ao serviço, não à OS.** O caminho é
   `os → os_servicos → os_servico_insumos`. Assim se sabe qual peça foi usada em
   qual serviço, e remover um serviço remove as peças dele.
-- **Orçamento.** O banco aceita mais de um orçamento por OS; a aplicação usa um
-  (`hasOne` no model `OS`). O `approval_token` é único e permite ao cliente
-  aprovar ou recusar por link, sem login. Ao aprovar, o estoque das peças é
-  baixado.
+- **Saga guarda só referências aos outros serviços.** `orcamento_id`,
+  `pagamento_id` e `execucao_id` são ids que vieram nas mensagens; não há chave
+  estrangeira para outro banco.
 - **`clientes.documento` é único** porque é a chave da autenticação: a Lambda
-  busca o cliente pelo CPF, e ele precisa apontar para um cliente só.
+  consulta o cliente pelo CPF na rota interna, e ele precisa apontar para um
+  cliente só.
 - **Valores em `decimal(10,2)`**, nunca ponto flutuante, para não haver erro de
   arredondamento em dinheiro.
 
@@ -132,3 +148,8 @@ erDiagram
 Criadas pelo Laravel e não usadas pelas regras da oficina: `users`,
 `password_reset_tokens`, `sessions`, `personal_access_tokens` (login antigo da
 Fase 2, via Sanctum), `cache`, `cache_locks`, `jobs`, `job_batches` e `failed_jobs`.
+
+Da mensageria: `outbox` (mensagens gravadas na mesma transação e publicadas
+depois) e `mensagens_processadas` (garante que uma mensagem repetida não seja
+processada duas vezes). `os_orcamentos` é da Fase 3 e não é mais usada: o
+orçamento passou para o Billing.
