@@ -14,8 +14,9 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 ## Sumário
 
 - [Links](#links)
+- [Requisitos da Fase 4](#requisitos-da-fase-4)
 - [Arquitetura da Fase 4](#arquitetura-da-fase-4)
-- [Arquitetura da Fase 3](#arquitetura-da-fase-3)
+- [Cobertura de testes](#cobertura-de-testes)
 - [Como testar](#como-testar)
 - [Autenticação por CPF](#autenticação-por-cpf)
 - [Documentação técnica](#documentação-técnica)
@@ -39,6 +40,28 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 
 > O ambiente roda no **AWS Academy Learner Lab**, que desliga os recursos ao fim
 > de cada sessão. Fora das sessões de demonstração, a URL pode estar fora do ar.
+
+## Requisitos da Fase 4
+
+Onde cada requisito do enunciado está atendido.
+
+| Requisito | Como foi atendido | Onde ver |
+|---|---|---|
+| Mínimo de 3 microsserviços, cada um com repositório, infraestrutura e banco | OS, Billing e Execução, com repo, manifestos Kubernetes, pipeline e banco próprios | [Arquitetura da Fase 4](#arquitetura-da-fase-4) · [ADR-005](docs/adrs/ADR-005-divisao-em-tres-microsservicos.md) |
+| Pelo menos um banco SQL e um NoSQL | PostgreSQL no OS e no Billing; MongoDB na Execução | [ADR-008](docs/adrs/ADR-008-mongodb-no-execucao.md) · [ADR-010](docs/adrs/ADR-010-banco-do-billing-no-cluster.md) |
+| Integração com o Mercado Pago | Porta `GatewayPagamento` no Billing, com adaptador simulado nesta entrega | [ADR-009](docs/adrs/ADR-009-mercado-pago-mock.md) |
+| REST síncrono e mensageria assíncrona | REST na entrada (API Gateway); RabbitMQ entre os serviços | [Contrato de mensagens](docs/fase4/contrato-mensagens.md) · [ADR-007](docs/adrs/ADR-007-rabbitmq-outbox-consumidor-idempotente.md) |
+| Nenhum serviço acessa o banco de outro | Os dados vão no payload das mensagens; a Lambda usa a rota interna do OS | [Componentes](docs/arquitetura/componentes.md) |
+| Saga Pattern com rollback e compensação | **Saga orquestrada** no OS Service; compensação em ordem inversa | [Estratégia da Saga](#estratégia-da-saga) · [saga.md](docs/arquitetura/saga.md) |
+| Escolha orquestrada × coreografada justificada no README | Orquestrada, justificada abaixo | [Estratégia da Saga](#estratégia-da-saga) · [ADR-006](docs/adrs/ADR-006-saga-orquestrada.md) |
+| Testes unitários em todos os serviços | PHPUnit nos 3 repositórios | [Cobertura de testes](#cobertura-de-testes) |
+| Um fluxo completo testado com BDD | Saga completa (sucesso e pagamento recusado) com Behat | [`features/saga_os.feature`](features/saga_os.feature) |
+| Cobertura mínima de 80% por serviço | Exigida no CI; badges e relatórios do SonarCloud | [Cobertura de testes](#cobertura-de-testes) |
+| Qualidade via SonarQube ou similar no CI | SonarCloud com quality gate nos 3 serviços | [Cobertura de testes](#cobertura-de-testes) |
+| CI/CD independente com build, testes, qualidade e deploy em Kubernetes | GitHub Actions por repositório; deploy no EKS | [CI/CD](#cicd) |
+| `main` protegida com PR e checagens obrigatórias | Nos 6 repositórios | [CI/CD](#cicd) |
+| Monitoramento e observabilidade da Fase 3 | New Relic com `saga_id` e `correlation_id` nos logs dos 3 serviços | [Consultas NRQL](docs/observabilidade/nrql.md) |
+| Swagger ou Postman atualizado | Documentação unificada dos 3 serviços | [readme.io](https://lorenalgm.readme.io/reference) · [`openapi.yaml`](openapi.yaml) |
 
 ## Arquitetura da Fase 4
 
@@ -131,66 +154,21 @@ Máquina de estados, diagramas de sequência e tabela de falhas:
 a [ADR-010](docs/adrs/ADR-010-banco-do-billing-no-cluster.md). O fluxo completo
 tem teste BDD em [`features/saga_os.feature`](features/saga_os.feature).
 
-## Arquitetura da Fase 3
+## Cobertura de testes
 
-O sistema foi dividido em **4 repositórios**, cada um com sua pipeline:
+Cobertura medida no CI de cada serviço (mínimo exigido: **80%**; o PR não passa
+abaixo disso) e publicada no SonarCloud.
 
-| Repositório | Responsabilidade |
-|---|---|
-| **oficina_mecanica** (este) | Código da API, imagem Docker e manifestos Kubernetes |
-| [oficina-auth-lambda](https://github.com/Lorenalgm/oficina-auth-lambda) | API Gateway e Lambdas de login por CPF |
-| [oficina-infra-k8s](https://github.com/Lorenalgm/oficina-infra-k8s) | Cluster EKS, Ingress e agente do New Relic |
-| [oficina-infra-db](https://github.com/Lorenalgm/oficina-infra-db) | Rede (VPC), banco RDS e Secrets Manager |
+| Serviço | Cobertura | Quality gate | Relatório |
+|---|---|---|---|
+| OS Service | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina_mecanica&metric=coverage)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina_mecanica) | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina_mecanica&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina_mecanica) | [SonarCloud](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina_mecanica) |
+| Billing Service | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina-billing-service&metric=coverage)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-billing-service) | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina-billing-service&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-billing-service) | [SonarCloud](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-billing-service) |
+| Execução Service | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina-execucao-service&metric=coverage)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-execucao-service) | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Lorenalgm_oficina-execucao-service&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-execucao-service) | [SonarCloud](https://sonarcloud.io/summary/overall?id=Lorenalgm_oficina-execucao-service) |
 
-Leia o caminho da requisição pelos números **(1 → 4)**:
-
-```mermaid
-flowchart LR
-    user(["👤 Cliente"])
-
-    subgraph aws["☁️ AWS"]
-        direction LR
-        gw["🚪 API Gateway<br/>entrada única"]
-        auth["🪪 Lambda<br/>login por CPF"]
-        authz["🛡️ Lambda<br/>confere o token"]
-
-        subgraph eks["☸️ Kubernetes (EKS)"]
-            api["⚙️ oficina-api<br/>1 a 10 pods"]
-        end
-
-        db[("🐘 PostgreSQL<br/>RDS")]
-    end
-
-    nr["📊 New Relic<br/>painéis e alertas"]
-
-    user ==>|"1 · CPF"| gw
-    gw ==>|"2 · gera token"| auth
-    auth --> db
-    user ==>|"3 · chamada com token"| gw
-    gw -.->|valida| authz
-    gw ==>|"4 · encaminha"| api
-    api --> db
-    api -.->|logs| nr
-
-    style aws fill:#f8fafc,stroke:#64748b,color:#0f172a
-    style eks fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
-    classDef entry fill:#e2e8f0,stroke:#475569,color:#0f172a;
-    classDef edge fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
-    classDef sec fill:#f5d0fe,stroke:#a21caf,color:#701a75;
-    classDef app fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    classDef data fill:#dcfce7,stroke:#15803d,color:#14532d;
-    classDef obs fill:#fef08a,stroke:#a16207,color:#713f12;
-    class user entry;
-    class gw edge;
-    class auth,authz sec;
-    class api app;
-    class db data;
-    class nr obs;
-```
-
-**Legenda:** ⬜ cliente · 🟪 autenticação · 🟦 aplicação · 🟩 banco · 🟨 monitoramento
-
-Diagrama completo, com todos os componentes: [componentes.md](docs/arquitetura/componentes.md).
+- **Unitários e de integração:** PHPUnit em `tests/Unit` e `tests/Feature`.
+- **BDD:** o fluxo completo da Saga (caminho feliz e pagamento recusado) em
+  [`features/saga_os.feature`](features/saga_os.feature), com Behat, rodando no CI.
+- Para medir localmente: `php artisan test --coverage --min=80` (requer PCOV ou Xdebug).
 
 ## Como testar
 
@@ -271,10 +249,11 @@ Diagramas passo a passo: [sequencia-auth.md](docs/arquitetura/sequencia-auth.md)
 | Aplicação | PHP 8.4, Laravel 11 | Framework maduro para APIs REST |
 | Servidor | Docker + FrankenPHP | Uma imagem só, com servidor HTTP embutido |
 | Banco | PostgreSQL 16 (Amazon RDS) | Dados relacionais e transações ([RFC-002](docs/rfcs/RFC-002-banco-de-dados.md)) |
+| Mensageria | RabbitMQ | Comandos e eventos da Saga, com retentativa e DLQ ([ADR-007](docs/adrs/ADR-007-rabbitmq-outbox-consumidor-idempotente.md)) |
 | Autenticação | JWT emitido por AWS Lambda | Login por CPF, validado sem consultar o banco ([RFC-003](docs/rfcs/RFC-003-estrategia-de-autenticacao.md)) |
 | Orquestração | Kubernetes (EKS na nuvem, kind local) | Escala automática por CPU e memória |
 | Monitoramento | New Relic | Logs, painéis e alertas |
-| Testes | PHPUnit + SQLite em memória | Rápidos e sem banco externo |
+| Testes | PHPUnit + SQLite em memória; Behat (BDD) | Rápidos e sem banco externo; BDD no fluxo da Saga |
 | CI/CD | GitHub Actions + SonarCloud | Testes, qualidade e deploy a cada push |
 
 ## Código: arquitetura hexagonal
@@ -285,12 +264,12 @@ implementa as interfaces definidas no domínio.
 ```
 src/
 ├── Domain/          # Regras de negócio e interfaces (sem framework)
-│   ├── Shared/      # CPF/CNPJ e placa
-│   ├── Catalogo/    # Serviço e insumo (peça)
+│   ├── Shared/      # CPF/CNPJ, placa e envelope das mensagens
+│   ├── Catalogo/    # Serviço e insumo (peça) com estoque
 │   ├── Identidade/  # Cliente e veículo
-│   └── Atendimento/ # OS, orçamento e histórico de status
-├── Application/     # Casos de uso (CriarOS, AprovarOrcamento, ...)
-└── Infrastructure/  # Banco (Eloquent) e eventos
+│   └── Atendimento/ # OS, histórico de status e a Saga (SagaOS)
+├── Application/     # Casos de uso (CriarOS, IniciarSagaOS, OrquestradorSagaOS, ...)
+└── Infrastructure/  # Banco (Eloquent), RabbitMQ, outbox e e-mail
 ```
 
 ```mermaid
@@ -309,11 +288,11 @@ graph TD
         OSS[Serviço da OS]
         OSSI[Peça usada]
         OSH[Histórico de status]
-        OSO[Orçamento\npendente/aprovado/recusado]
+        SG[Saga\nestado, passos,\ncompensações]
         OS -- contém --> OSS
         OSS -- usa --> OSSI
         OS -- registra --> OSH
-        OS -- tem --> OSO
+        OS -- acompanhada por --> SG
     end
     OS -- pertence a --> C
     OS -- é do --> V
@@ -389,6 +368,8 @@ flowchart LR
     class done ok;
 ```
 
+- **CI** (todo PR): testes com cobertura mínima de 80%, Behat e SonarCloud.
+- **CD** (`main`): testes → imagem → migração → rollout no EKS → smoke test.
 - `main` = produção, `develop` = homologação.
 - A branch `main` é protegida: só recebe código por pull request.
 - As senhas do banco vêm do **Secrets Manager** e são entregues ao cluster no
