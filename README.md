@@ -14,6 +14,7 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 ## Sumário
 
 - [Links](#links)
+- [Requisitos da Fase 4](#requisitos-da-fase-4)
 - [Arquitetura da Fase 4](#arquitetura-da-fase-4)
 - [Cobertura de testes](#cobertura-de-testes)
 - [Como testar](#como-testar)
@@ -39,6 +40,28 @@ AWS: autenticação por CPF em uma função serverless, serviços em Kubernetes
 
 > O ambiente roda no **AWS Academy Learner Lab**, que desliga os recursos ao fim
 > de cada sessão. Fora das sessões de demonstração, a URL pode estar fora do ar.
+
+## Requisitos da Fase 4
+
+Onde cada requisito do enunciado está atendido.
+
+| Requisito | Como foi atendido | Onde ver |
+|---|---|---|
+| Mínimo de 3 microsserviços, cada um com repositório, infraestrutura e banco | OS, Billing e Execução, com repo, manifestos Kubernetes, pipeline e banco próprios | [Arquitetura da Fase 4](#arquitetura-da-fase-4) · [ADR-005](docs/adrs/ADR-005-divisao-em-tres-microsservicos.md) |
+| Pelo menos um banco SQL e um NoSQL | PostgreSQL no OS e no Billing; MongoDB na Execução | [ADR-008](docs/adrs/ADR-008-mongodb-no-execucao.md) · [ADR-010](docs/adrs/ADR-010-banco-do-billing-no-cluster.md) |
+| Integração com o Mercado Pago | Porta `GatewayPagamento` no Billing, com adaptador simulado nesta entrega | [ADR-009](docs/adrs/ADR-009-mercado-pago-mock.md) |
+| REST síncrono e mensageria assíncrona | REST na entrada (API Gateway); RabbitMQ entre os serviços | [Contrato de mensagens](docs/fase4/contrato-mensagens.md) · [ADR-007](docs/adrs/ADR-007-rabbitmq-outbox-consumidor-idempotente.md) |
+| Nenhum serviço acessa o banco de outro | Os dados vão no payload das mensagens; a Lambda usa a rota interna do OS | [Componentes](docs/arquitetura/componentes.md) |
+| Saga Pattern com rollback e compensação | **Saga orquestrada** no OS Service; compensação em ordem inversa | [Estratégia da Saga](#estratégia-da-saga) · [saga.md](docs/arquitetura/saga.md) |
+| Escolha orquestrada × coreografada justificada no README | Orquestrada, justificada abaixo | [Estratégia da Saga](#estratégia-da-saga) · [ADR-006](docs/adrs/ADR-006-saga-orquestrada.md) |
+| Testes unitários em todos os serviços | PHPUnit nos 3 repositórios | [Cobertura de testes](#cobertura-de-testes) |
+| Um fluxo completo testado com BDD | Saga completa (sucesso e pagamento recusado) com Behat | [`features/saga_os.feature`](features/saga_os.feature) |
+| Cobertura mínima de 80% por serviço | Exigida no CI; badges e relatórios do SonarCloud | [Cobertura de testes](#cobertura-de-testes) |
+| Qualidade via SonarQube ou similar no CI | SonarCloud com quality gate nos 3 serviços | [Cobertura de testes](#cobertura-de-testes) |
+| CI/CD independente com build, testes, qualidade e deploy em Kubernetes | GitHub Actions por repositório; deploy no EKS | [CI/CD](#cicd) |
+| `main` protegida com PR e checagens obrigatórias | Nos 6 repositórios | [CI/CD](#cicd) |
+| Monitoramento e observabilidade da Fase 3 | New Relic com `saga_id` e `correlation_id` nos logs dos 3 serviços | [Consultas NRQL](docs/observabilidade/nrql.md) |
+| Swagger ou Postman atualizado | Documentação unificada dos 3 serviços | [readme.io](https://lorenalgm.readme.io/reference) · [`openapi.yaml`](openapi.yaml) |
 
 ## Arquitetura da Fase 4
 
